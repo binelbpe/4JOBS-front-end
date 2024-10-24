@@ -40,7 +40,7 @@ class UserRecruiterSocketService {
     }
 
     this.socket = io(
-      process.env.REACT_APP_SOCKET_URL || "http://localhost:5000",
+      process.env.REACT_APP_SOCKET_URL ,
       {
         transports: ["websocket"],
         reconnection: true,

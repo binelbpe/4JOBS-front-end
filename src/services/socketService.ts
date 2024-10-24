@@ -17,7 +17,7 @@ class SocketService {
       this.socket.disconnect();
     }
 
-    const socketUrl = process.env.REACT_APP_SOCKET_URL || "http://localhost:5000";
+    const socketUrl = process.env.REACT_APP_SOCKET_URL ;
 
     this.socket = io(socketUrl, {
       path: '/user-socket',
