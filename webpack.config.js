@@ -1,0 +1,9 @@
+module.exports = {
+    // ... existing configuration ...
+    resolve: {
+        // Remove or update the fallback property
+        // fallback: { ... }, // Remove this line
+        // ... existing properties ...
+    },
+    // ... existing configuration ...
+}
