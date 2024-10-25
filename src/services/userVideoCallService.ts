@@ -6,6 +6,7 @@ class UserVideoCallService {
   private remoteStream: MediaStream | null = null;
   private onRemoteStreamUpdate: ((stream: MediaStream) => void) | null = null;
   private onCallStateChange: ((state: string) => void) | null = null;
+  private onIceCandidate: ((candidate: RTCIceCandidate) => void) | null = null;
 
   constructor() {
     this.initializePeerConnection();
@@ -25,8 +26,10 @@ class UserVideoCallService {
 
     this.peerConnection.onicecandidate = (event) => {
       if (event.candidate) {
-        // Send the ICE candidate to the other peer
-        // This should be implemented using your signaling mechanism (e.g., WebSocket)
+        // Emit the ICE candidate to the other peer
+        if (this.onIceCandidate) {
+          this.onIceCandidate(event.candidate);
+        }
       }
     };
   }
@@ -107,6 +110,10 @@ class UserVideoCallService {
 
   setOnCallStateChange(callback: (state: string) => void): void {
     this.onCallStateChange = callback;
+  }
+
+  setOnIceCandidate(callback: (candidate: RTCIceCandidate) => void): void {
+    this.onIceCandidate = callback;
   }
 
   disconnectCall(): void {

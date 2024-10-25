@@ -160,6 +160,20 @@ class SocketService {
     }
     return () => {};
   }
+
+  emitIceCandidate(recipientId: string, candidate: RTCIceCandidate) {
+    if (this.socket && this.connected) {
+      this.socket.emit("iceCandidate", { recipientId, candidate });
+    }
+  }
+
+  onIceCandidate(callback: (data: { candidate: RTCIceCandidate }) => void): () => void {
+    if (this.socket) {
+      this.socket.on("iceCandidate", callback);
+      return () => this.socket?.off("iceCandidate", callback);
+    }
+    return () => {};
+  }
 }
 
 export const socketService = new SocketService();

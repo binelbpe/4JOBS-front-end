@@ -4,7 +4,7 @@ import { RootState, AppDispatch } from "../../redux/store";
 import {
   fetchMessages,
   markAllMessagesAsLocallyRead,
-  setMessageSending
+  setMessageSending,
 } from "../../redux/slices/recruiterMessageSlice";
 import { Message } from "../../types/recruiterMessageType";
 import { userRecruiterSocketService } from "../../services/userRecruiterSocketService";
@@ -104,14 +104,20 @@ const RecruiterConversation: React.FC<ConversationProps> = ({
   const handleTyping = () => {
     if (!isTyping) {
       setIsTyping(true);
-      userRecruiterSocketService.emitTyping(conversationId, conversation?.participant.id || "");
+      userRecruiterSocketService.emitTyping(
+        conversationId,
+        conversation?.participant.id || ""
+      );
     }
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
     typingTimeoutRef.current = setTimeout(() => {
       setIsTyping(false);
-      userRecruiterSocketService.emitStoppedTyping(conversationId, conversation?.participant.id || "");
+      userRecruiterSocketService.emitStoppedTyping(
+        conversationId,
+        conversation?.participant.id || ""
+      );
     }, 3000);
   };
 
@@ -163,11 +169,17 @@ const RecruiterConversation: React.FC<ConversationProps> = ({
         </button>
       </ConversationHeader>
       {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+        <div
+          className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative"
+          role="alert"
+        >
           <span className="block sm:inline">{error}</span>
         </div>
       )}
-      <div ref={messageListRef} className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div
+        ref={messageListRef}
+        className="flex-1 overflow-y-auto p-4 space-y-4"
+      >
         {messages.map((message: Message) => (
           <div
             key={`${message.id}-${message.timestamp}`}

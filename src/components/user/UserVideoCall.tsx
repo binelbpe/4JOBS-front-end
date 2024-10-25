@@ -51,6 +51,11 @@ const UserVideoCall: React.FC<UserVideoCallProps> = ({ recipientId, onEndCall, i
           }
         });
 
+        // Ensure ICE candidates are handled
+        userVideoCallService.setOnIceCandidate((candidate) => {
+          socketService.emit("iceCandidate", { recipientId, candidate });
+        });
+
         const callData = incomingCallData || contextIncomingCallData;
         if (callData) {
           // Handle incoming call
