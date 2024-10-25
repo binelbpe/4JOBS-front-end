@@ -157,9 +157,9 @@ const RecruiterConversation: React.FC<ConversationProps> = ({
       >
         <button
           onClick={handleStartVideoCall}
-          className="ml-2 p-2 rounded-full bg-purple-500 text-white hover:bg-purple-600 transition-colors"
+          className="ml-2 p-2 rounded-full bg-purple-500 text-white hover:bg-purple-600 transition-colors text-sm md:text-base"
         >
-          <FontAwesomeIcon icon={faVideo} />
+          <FontAwesomeIcon icon={faVideo} className="text-lg md:text-xl" />
         </button>
       </ConversationHeader>
       {error && (
@@ -225,12 +225,12 @@ const RecruiterConversation: React.FC<ConversationProps> = ({
               setNewMessage(e.target.value);
               handleTyping();
             }}
-            className="flex-1 border rounded-l-lg p-2 w-full"
+            className="flex-1 border rounded-l-lg p-2 w-full text-sm md:text-base"
             placeholder="Type a message..."
           />
           <button
             type="submit"
-            className="bg-purple-500 text-white rounded-r-lg px-4 py-2 whitespace-nowrap"
+            className="bg-purple-500 text-white rounded-r-lg px-4 py-2 whitespace-nowrap text-sm md:text-base"
           >
             Send
           </button>
