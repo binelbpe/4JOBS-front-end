@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useCallback } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { createPost } from "../../../redux/slices/postSlice";
 import { RootState, AppDispatch } from "../../../redux/store";
@@ -71,19 +71,19 @@ const CreatePost: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSubmitting) return; // Prevent double submission
+    if (isSubmitting) return; 
 
-    setIsSubmitting(true); // Set submitting state to true
+    setIsSubmitting(true); 
 
     if (!validateContent(content)) {
-      setIsSubmitting(false); // Reset submitting state if validation fails
+      setIsSubmitting(false); 
       return;
     }
     if (
       (image && !validateFile(image, true)) ||
       (video && !validateFile(video, false))
     ) {
-      setIsSubmitting(false); // Reset submitting state if validation fails
+      setIsSubmitting(false); 
       return;
     }
 
@@ -93,7 +93,7 @@ const CreatePost: React.FC = () => {
       toast.error(
         "Please add some content, an image, or a video to your post."
       );
-      setIsSubmitting(false); // Reset submitting state if no content
+      setIsSubmitting(false); 
     }
   };
 
@@ -135,7 +135,7 @@ const CreatePost: React.FC = () => {
     setIsUploading(false);
     setIsProcessing(false);
     setIsConfirmed(false);
-    setIsSubmitting(false); // Reset submitting state after processing
+    setIsSubmitting(false); 
   };
 
   const createPostInBackend = useCallback(
