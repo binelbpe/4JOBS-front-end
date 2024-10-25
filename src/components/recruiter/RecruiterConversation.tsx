@@ -150,7 +150,7 @@ const RecruiterConversation: React.FC<ConversationProps> = ({
   }, []);
 
   return (
-    <div className="flex-1 flex flex-col h-full">
+    <div className="flex-1 flex flex-col h-full p-4">
       <ConversationHeader
         participantName={conversation?.participant.name || "Unknown"}
         isOnline={onlineStatus[conversation?.participant.id || ""] || false}

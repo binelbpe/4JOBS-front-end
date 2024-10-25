@@ -11,21 +11,20 @@ const RecruiterMessaging: React.FC = () => {
   return (
     <div className="flex flex-col h-screen">
       <RecruiterHeader />
-     
-        <div className="flex flex-1 overflow-hidden">
-          <MessageList
-            onSelectConversation={setSelectedConversation}
-            selectedConversationId={selectedConversation}
-          />
-          {selectedConversation ? (
-            <Conversation conversationId={selectedConversation} />
-          ) : (
-            <div className="flex-1 flex items-center justify-center text-gray-500">
-              Select a conversation to start messaging
-            </div>
-          )}
-        </div>
+      <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
+        <MessageList
+          onSelectConversation={setSelectedConversation}
+          selectedConversationId={selectedConversation}
+        />
+        {selectedConversation ? (
+          <Conversation conversationId={selectedConversation} />
+        ) : (
+          <div className="flex-1 flex items-center justify-center text-gray-500">
+            Select a conversation to start messaging
+          </div>
+        )}
       </div>
+    </div>
   );
 };
 

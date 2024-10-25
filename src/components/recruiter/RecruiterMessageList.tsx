@@ -58,7 +58,7 @@ const MessageList: React.FC<MessageListProps> = ({
   }
 
   return (
-    <div className="w-1/3 border-r">
+    <div className="w-full md:w-1/3 border-r">
       <h2 className="text-xl font-semibold p-4 border-b">Conversations</h2>
       <ul>
         {conversations.map((conversation: Conversation) => {
