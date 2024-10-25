@@ -186,7 +186,7 @@ const UserConversation: React.FC<ConversationProps> = ({ conversationId }) => {
   }, []);
 
   return (
-    <div className="flex-1 flex flex-col">
+    <div className="flex-1 flex flex-col h-full p-4">
       <ConversationHeader
         participantName={conversation?.participant.name || "Unknown"}
         isOnline={onlineStatus[conversation?.participant.id || ""] || false}
@@ -194,7 +194,7 @@ const UserConversation: React.FC<ConversationProps> = ({ conversationId }) => {
       <div
         ref={messageListRef}
         className="flex-grow overflow-y-auto p-4"
-        style={{ maxHeight: "calc(100vh - 200px)" }}
+        style={{ maxHeight: "calc(100vh - 200px)" }} // Adjusted for smaller screens
       >
         {messages.map((message: URMessage) => (
           <div
