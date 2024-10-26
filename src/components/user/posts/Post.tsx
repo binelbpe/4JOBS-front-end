@@ -87,8 +87,8 @@ const Post: React.FC<PostType> = ({
       <div className="p-4 border-b text-purple-600 border-purple-200 dark:border-purple-700">
         <div className="flex items-center space-x-3">
           <img
-            src={user.profileImage || "https://via.placeholder.com/40"}
-            alt={user.name}
+            src={user.profileImage}
+            alt="Profile"
             className="w-10 h-10 rounded-full object-cover cursor-pointer"
             onClick={() => navigate(`/connection/profile/${user._id}`)}
           />
@@ -173,13 +173,17 @@ const Post: React.FC<PostType> = ({
                     }
                     alt={comment.userId.name}
                     className="w-8 h-8 rounded-full object-cover cursor-pointer"
-                    onClick={() => navigate(`/connection/profile/${comment.userId.id}`)}
+                    onClick={() =>
+                      navigate(`/connection/profile/${comment.userId.id}`)
+                    }
                   />
                   <div>
                     <p className="text-sm font-medium text-purple-800 dark:text-purple-600">
                       <span
                         className="cursor-pointer"
-                        onClick={() => navigate(`/connection/profile/${comment.userId.id}`)}
+                        onClick={() =>
+                          navigate(`/connection/profile/${comment.userId.id}`)
+                        }
                       >
                         {comment.userId.name}
                       </span>

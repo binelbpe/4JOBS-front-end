@@ -186,7 +186,7 @@ const CreatePost: React.FC = () => {
       const outputFileName = "output.mp4";
       await ffmpeg.writeFile(inputFileName, await fetchFile(inputFile));
 
-      // Calculate target bitrate based on the desired file size
+
       const duration = await getDuration(inputFile);
       const targetBitrate = Math.floor((TARGET_VIDEO_SIZE * 8) / duration);
 

@@ -61,7 +61,6 @@ const Conversation: React.FC<ConversationProps> = ({ userId }) => {
   } = useCall();
   const debouncedEmitTypingRef = useRef<(isTyping: boolean) => void>();
 
-  // Fetch conversation data
   const fetchConversationData = useCallback(() => {
     if (
       currentUser &&
@@ -72,7 +71,6 @@ const Conversation: React.FC<ConversationProps> = ({ userId }) => {
       dispatch(fetchConversation({ userId1: currentUser.id, userId2: userId }))
         .unwrap()
         .catch((error) => {
-          // Handle error (e.g., show a notification to the user)
         });
       setHasFetchedConversation(true);
     }
@@ -93,7 +91,7 @@ const Conversation: React.FC<ConversationProps> = ({ userId }) => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Mark messages as read and update unread count
+  
   useEffect(() => {
     const unreadMessages = messages.filter(
       (message: Message) =>
@@ -114,7 +112,7 @@ const Conversation: React.FC<ConversationProps> = ({ userId }) => {
     }
   }, [dispatch, messages, userId]);
 
-  // Handle sending a message
+
   const handleSendMessage = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
@@ -137,7 +135,7 @@ const Conversation: React.FC<ConversationProps> = ({ userId }) => {
     [newMessage, currentUser, userId, sendSocketMessage, isConnected]
   );
 
-  // Handle typing status
+ 
   useEffect(() => {
     debouncedEmitTypingRef.current = debounce((isTyping: boolean) => {
       emitTyping(isTyping);
@@ -166,7 +164,7 @@ const Conversation: React.FC<ConversationProps> = ({ userId }) => {
     };
   }, []);
 
-  // Handle video call actions
+
   const handleAcceptCall = useCallback(() => {
     acceptCall();
   }, [acceptCall]);

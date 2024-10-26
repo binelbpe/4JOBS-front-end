@@ -209,10 +209,10 @@ const UserHeader: React.FC = () => {
     },
   ];
 
-  // Add this new state
+  
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
-  // Add this new function to toggle the mobile menu
+ 
   const toggleMobileMenu = useCallback(() => {
     setShowMobileMenu((prev) => !prev);
     setShowSearch(false);

@@ -172,13 +172,13 @@ const JobList: React.FC = () => {
         onClick={() => handleApply(jobId)}
         disabled={appliedJobs?.includes(jobId)}
         sx={{
-          bgcolor: '#9333EA', // purple-600
+          bgcolor: '#9333EA', 
           '&:hover': {
-            bgcolor: '#7E22CE' // purple-700
+            bgcolor: '#7E22CE' 
           },
           '&.Mui-disabled': {
-            bgcolor: '#E9D5FF', // purple-200
-            color: '#6B7280' // gray-500
+            bgcolor: '#E9D5FF', 
+            color: '#6B7280' 
           }
         }}
       >
@@ -247,9 +247,9 @@ const JobList: React.FC = () => {
               onClick={handleFilterChange}
               sx={{
                 height: '100%',
-                bgcolor: '#9333EA', // purple-600
+                bgcolor: '#9333EA', 
                 '&:hover': {
-                  bgcolor: '#7E22CE' // purple-700
+                  bgcolor: '#7E22CE' 
                 }
               }}
               size="small"
@@ -267,7 +267,7 @@ const JobList: React.FC = () => {
                 border: '1px solid',
                 borderColor: 'purple.300',
                 borderRadius: 2,
-                p: isSmallScreen ? 1 : 2, // Adjust padding for small screens
+                p: isSmallScreen ? 1 : 2,
                 mb: 2,
                 bgcolor: 'white'
               }}>
@@ -289,9 +289,9 @@ const JobList: React.FC = () => {
                     variant="contained"
                     onClick={() => handleViewDetails(job._id)}
                     sx={{
-                      bgcolor: '#9333EA', // purple-600
+                      bgcolor: '#9333EA', 
                       '&:hover': {
-                        bgcolor: '#7E22CE' // purple-700
+                        bgcolor: '#7E22CE' 
                       }
                     }}
                     className={`text-sm ${isSmallScreen ? 'text-xs' : 'sm:text-base'}`}
@@ -347,10 +347,10 @@ const JobList: React.FC = () => {
           <Button
             onClick={() => setReportDialog(false)}
             sx={{
-              bgcolor: '#9333EA', // purple-600
+              bgcolor: '#9333EA', 
               color: 'white',
               '&:hover': {
-                bgcolor: '#7E22CE' // purple-700
+                bgcolor: '#7E22CE' 
               }
             }}
           >
@@ -359,10 +359,10 @@ const JobList: React.FC = () => {
           <Button
             onClick={handleReport}
             sx={{
-              bgcolor: '#9333EA', // purple-600
+              bgcolor: '#9333EA', 
               color: 'white',
               '&:hover': {
-                bgcolor: '#7E22CE' // purple-700
+                bgcolor: '#7E22CE' 
               }
             }}
           >

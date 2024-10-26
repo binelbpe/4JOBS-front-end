@@ -74,7 +74,7 @@ const Profile: React.FC = () => {
 
     const today = new Date();
     const minDate = new Date();
-    minDate.setFullYear(today.getFullYear() - 16); // Set minimum date to 16 years ago
+    minDate.setFullYear(today.getFullYear() - 16);
 
     if (formData.dateOfBirth && new Date(formData.dateOfBirth) > today) {
       newErrors.dateOfBirth = 'Date of Birth cannot be a future date.';

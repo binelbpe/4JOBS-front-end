@@ -10,8 +10,8 @@ import { Message } from "../../types/recruiterMessageType";
 import { userRecruiterSocketService } from "../../services/userRecruiterSocketService";
 import { format, isValid } from "date-fns";
 import ConversationHeader from "../shared/ConversationHeader";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faVideo } from "@fortawesome/free-solid-svg-icons";
+// import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+// import { faVideo } from "@fortawesome/free-solid-svg-icons";
 import VideoCall from "../shared/VideoCall";
 import { toast } from "react-toastify";
 
@@ -49,7 +49,7 @@ const RecruiterConversation: React.FC<ConversationProps> = ({
   const [isVideoCallActive, setIsVideoCallActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Scroll to bottom of message list
+
   const scrollToBottom = useCallback(() => {
     if (messageListRef.current) {
       messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
@@ -79,7 +79,7 @@ const RecruiterConversation: React.FC<ConversationProps> = ({
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
-  // Handle sending a new message
+ 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newMessage.trim() && currentRecruiter) {
@@ -100,7 +100,7 @@ const RecruiterConversation: React.FC<ConversationProps> = ({
     }
   };
 
-  // Handle typing status
+
   const handleTyping = () => {
     if (!isTyping) {
       setIsTyping(true);
@@ -136,9 +136,9 @@ const RecruiterConversation: React.FC<ConversationProps> = ({
     (status) => status
   );
 
-  const handleStartVideoCall = () => {
-    setIsVideoCallActive(true);
-  };
+  // const handleStartVideoCall = () => {
+  //   setIsVideoCallActive(true);
+  // };
 
   const handleEndVideoCall = () => {
     setIsVideoCallActive(false);
@@ -161,12 +161,12 @@ const RecruiterConversation: React.FC<ConversationProps> = ({
         participantName={conversation?.participant.name || "Unknown"}
         isOnline={onlineStatus[conversation?.participant.id || ""] || false}
       >
-        <button
+        {/* <button
           onClick={handleStartVideoCall}
           className="ml-2 p-2 rounded-full bg-purple-500 text-white hover:bg-purple-600 transition-colors text-sm md:text-base"
         >
           <FontAwesomeIcon icon={faVideo} className="text-lg md:text-xl" />
-        </button>
+        </button> */}
       </ConversationHeader>
       {error && (
         <div

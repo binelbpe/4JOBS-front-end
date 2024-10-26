@@ -2,11 +2,10 @@ import React, { useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useParams, useNavigate } from 'react-router-dom';
 import { RootState, AppDispatch } from '../../redux/store';
-import { fetchConnectionProfile } from '../../redux/slices/connectionSlice'; // Ensure this is correct
+import { fetchConnectionProfile } from '../../redux/slices/connectionSlice'; 
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faEnvelope, faPhone, faBirthdayCake, faVenusMars, faArrowLeft } from '@fortawesome/free-solid-svg-icons';
 import { UserCircle } from 'lucide-react';
-import Header from './Header'; // Ensure this is correct
 
 
 const ConnectionProfile: React.FC = () => {
@@ -17,7 +16,7 @@ const ConnectionProfile: React.FC = () => {
 
   useEffect(() => {
     if (userId) {
-      dispatch(fetchConnectionProfile(userId)); // Ensure this dispatch is correct
+      dispatch(fetchConnectionProfile(userId)); 
     }
   }, [dispatch, userId]);
 
