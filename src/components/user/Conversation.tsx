@@ -19,9 +19,10 @@ import "react-toastify/dist/ReactToastify.css";
 
 interface ConversationProps {
   userId: string;
+  onBack: () => void;
 }
 
-const Conversation: React.FC<ConversationProps> = ({ userId }) => {
+const Conversation: React.FC<ConversationProps> = ({ userId, onBack }) => {
   const dispatch = useDispatch<AppDispatch>();
   const currentUser = useSelector((state: RootState) => state.auth.user);
   const conversationId =
@@ -70,8 +71,7 @@ const Conversation: React.FC<ConversationProps> = ({ userId }) => {
     ) {
       dispatch(fetchConversation({ userId1: currentUser.id, userId2: userId }))
         .unwrap()
-        .catch((error) => {
-        });
+        .catch((error) => {});
       setHasFetchedConversation(true);
     }
   }, [
@@ -91,7 +91,6 @@ const Conversation: React.FC<ConversationProps> = ({ userId }) => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  
   useEffect(() => {
     const unreadMessages = messages.filter(
       (message: Message) =>
@@ -111,7 +110,6 @@ const Conversation: React.FC<ConversationProps> = ({ userId }) => {
       dispatch(updateTotalUnreadCount());
     }
   }, [dispatch, messages, userId]);
-
 
   const handleSendMessage = useCallback(
     (e: React.FormEvent) => {
@@ -135,7 +133,6 @@ const Conversation: React.FC<ConversationProps> = ({ userId }) => {
     [newMessage, currentUser, userId, sendSocketMessage, isConnected]
   );
 
- 
   useEffect(() => {
     debouncedEmitTypingRef.current = debounce((isTyping: boolean) => {
       emitTyping(isTyping);
@@ -164,7 +161,6 @@ const Conversation: React.FC<ConversationProps> = ({ userId }) => {
     };
   }, []);
 
-
   const handleAcceptCall = useCallback(() => {
     acceptCall();
   }, [acceptCall]);
@@ -189,6 +185,12 @@ const Conversation: React.FC<ConversationProps> = ({ userId }) => {
         hideProgressBar={false}
       />
       <div className="p-4 border-b border-gray-300 flex justify-between items-center">
+        <button
+          onClick={onBack}
+          className="text-purple-600 hover:text-purple-800 mr-2"
+        >
+          Back
+        </button>
         <h2 className="text-xl font-semibold text-purple-700">
           {connection?.user.name || "Chat"}
         </h2>

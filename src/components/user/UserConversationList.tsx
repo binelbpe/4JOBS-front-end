@@ -89,7 +89,7 @@ const UserConversationList: React.FC<ConversationListProps> = ({
               </div>
               <div className="flex-grow min-w-0">
                 <h3 className="font-semibold truncate">
-                  {conversation.participant.name}
+                  {conversation.participant.name} - {conversation.participant.companyName}
                 </h3>
                 <p className="text-sm text-gray-600 truncate">
                   {conversation.lastMessage}

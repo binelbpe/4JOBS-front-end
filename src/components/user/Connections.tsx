@@ -24,7 +24,7 @@ import { User } from "../../types/auth";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { useNavigate } from "react-router-dom";
-import { selectMemoizedConnections } from "../../redux/store"; 
+import { selectMemoizedConnections } from '../../redux/store';
 
 interface ConnectionRequest {
   _id: string;

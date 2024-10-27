@@ -34,7 +34,7 @@ import {
   SelectChangeEvent,
   useMediaQuery,
 } from "@mui/material";
-import { Business, LocationOn, CalendarToday, Flag } from "@mui/icons-material";
+import { Business, LocationOn, CalendarToday, Flag, Search as SearchIcon } from "@mui/icons-material";
 
 const JobList: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -255,6 +255,24 @@ const JobList: React.FC = () => {
               size="small"
             >
               Clear Filters
+            </Button>
+          </Grid>
+          <Grid item xs={12} sm={4} md={3}>
+            <Button
+              fullWidth
+              variant="contained"
+              onClick={() => navigate('/jobs/search')}
+              startIcon={<SearchIcon />}
+              sx={{
+                height: '100%',
+                bgcolor: '#9333EA',
+                '&:hover': {
+                  bgcolor: '#7E22CE'
+                }
+              }}
+              size="small"
+            >
+              Advanced Search
             </Button>
           </Grid>
         </Grid>

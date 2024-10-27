@@ -383,7 +383,7 @@ const UserHeader: React.FC = () => {
         {/* Logout Confirmation Modal */}
         {showLogoutModal && (
           <div className="fixed inset-0 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-lg p-6">
+            <div className="bg-purple-500 rounded-lg shadow-lg p-6">
               <h2 className="text-lg font-semibold">Confirm Logout</h2>
               <p>Are you sure you want to logout?</p>
               <div className="flex justify-end mt-4">

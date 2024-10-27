@@ -53,6 +53,7 @@ import UserVideoCall from './components/user/UserVideoCall';
 import ResumeBuilder from './components/user/ResumeBuilder';
 import RecruiterJobDetails from './components/recruiter/RecruiterJobDetails';
 import ForgotPassword from './components/user/ForgotPassword';
+import AdvancedJobSearch from './components/user/AdvancedJobSearch';
 
 const AppContent: React.FC = () => {
   const { handleIncomingCall, isCallActive, incomingCallData, endCall } = useCall();
@@ -97,6 +98,7 @@ const AppContent: React.FC = () => {
         <Route path="/search-results" element={<PrivateRoute><SearchResults /></PrivateRoute>} />
         <Route path="/resume-builder" element={<PrivateRoute><ResumeBuilder /></PrivateRoute>} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/jobs/search" element={<AdvancedJobSearch />} />
         
         {/* Admin Routes */}
         <Route path="/admin" element={<AdminLogin />} />
