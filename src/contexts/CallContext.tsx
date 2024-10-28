@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useCallback, ReactNode } from 'react';
+import React, { createContext, useState, useContext, useCallback, ReactNode, useEffect } from 'react';
 import { socketService } from '../services/socketService';
 
 interface CallContextType {
@@ -26,21 +26,29 @@ export const CallProvider: React.FC<CallProviderProps> = ({ children }) => {
 
   const handleIncomingCall = useCallback((data: { callerId: string; offer: string }) => {
     console.log("Incoming call from:", data.callerId);
-    setIsIncomingCall(true);
-    setIncomingCallData(data);
-  }, []);
+    // Ensure we're not already in a call
+    if (!isCallActive && !isCallInitialized) {
+      setIsIncomingCall(true);
+      setIncomingCallData(data);
+    } else {
+      console.log("Call rejected - already in a call");
+      socketService.emit("rejectCall", { callerId: data.callerId });
+    }
+  }, [isCallActive, isCallInitialized]);
 
   const acceptCall = useCallback(() => {
     console.log("Call accepted in CallContext");
     if (incomingCallData?.callerId) {
       console.log("Emitting call accepted to:", incomingCallData.callerId);
       socketService.emitCallAccepted(incomingCallData.callerId);
+      setIsIncomingCall(false);
+      setIsCallActive(true);
+      setIsCallInitialized(true);
     }
-    setIsIncomingCall(false);
-    setIsCallActive(true);
   }, [incomingCallData]);
 
   const rejectCall = useCallback(() => {
+    console.log("Call rejected in CallContext");
     if (incomingCallData) {
       socketService.emit("rejectCall", { callerId: incomingCallData.callerId });
       setIsIncomingCall(false);
@@ -57,13 +65,44 @@ export const CallProvider: React.FC<CallProviderProps> = ({ children }) => {
     console.log(`Setting up video call with ${recipientId}`);
     setIsCallActive(true);
     setIsCallInitialized(true);
-  }, [isCallInitialized]);
+
+    let timeoutId: NodeJS.Timeout;
+
+    const cleanup = () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      setIsCallInitialized(false);
+      setIsCallActive(false);
+      setIncomingCallData(null);
+    };
+
+    timeoutId = setTimeout(() => {
+      if (!isCallActive) {
+        console.log("Call setup timed out");
+        cleanup();
+      }
+    }, 30000);
+
+    return cleanup;
+  }, [isCallInitialized, isCallActive]);
 
   const endCall = useCallback(() => {
-    console.log("Call ended");
+    console.log("Call ended in CallContext");
     setIsCallActive(false);
     setIncomingCallData(null);
     setIsCallInitialized(false);
+    setIsIncomingCall(false);
+  }, []);
+
+  // Add cleanup on unmount
+  useEffect(() => {
+    return () => {
+      setIsCallActive(false);
+      setIncomingCallData(null);
+      setIsCallInitialized(false);
+      setIsIncomingCall(false);
+    };
   }, []);
 
   return (

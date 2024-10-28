@@ -1,4 +1,5 @@
 import { Buffer } from 'buffer';
+import { webRTCConfig } from '../config/webrtcConfig';
 
 class UserVideoCallService {
   private peerConnection: RTCPeerConnection | null = null;
@@ -13,36 +14,46 @@ class UserVideoCallService {
     this.initializePeerConnection();
   }
 
-  private initializePeerConnection() {
+  private async tryConnectionRecovery(): Promise<void> {
+    try {
+      if (this.peerConnection) {
+        await this.peerConnection.restartIce();
+        console.log('Attempting ICE restart');
+      }
+    } catch (error) {
+      console.error('Failed to recover connection:', error);
+    }
+  }
+
+  private initializePeerConnection(): void {
     if (this.peerConnection) {
       this.peerConnection.close();
     }
 
-    this.peerConnection = new RTCPeerConnection({
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-        {
-          urls: 'turn:numb.viagenie.ca',
-          username: 'webrtc@live.com',
-          credential: 'muazkh'
-        }
-      ]
-    });
+    this.peerConnection = new RTCPeerConnection(webRTCConfig);
 
     this.peerConnection.ontrack = (event) => {
-      console.log('Received remote track:', event.track.kind, event.track.enabled);
+      console.log('Track received:', {
+        kind: event.track.kind,
+        enabled: event.track.enabled,
+        readyState: event.track.readyState,
+        muted: event.track.muted
+      });
       
       if (!this.remoteStream) {
         this.remoteStream = new MediaStream();
         console.log('Created new remote MediaStream');
       }
       
-      this.remoteStream.addTrack(event.track);
-      console.log('Added track to remote stream:', event.track.kind);
+      event.streams.forEach(stream => {
+        console.log('Adding remote stream:', stream.id);
+        if (!this.remoteStream!.getTracks().some(t => t.id === event.track.id)) {
+          this.remoteStream!.addTrack(event.track);
+        }
+      });
       
       if (this.onRemoteStreamUpdate) {
-        console.log('Updating remote stream with tracks:', 
+        console.log('Calling remote stream update with tracks:', 
           this.remoteStream.getTracks().map(t => `${t.kind}:${t.enabled}`));
         this.onRemoteStreamUpdate(this.remoteStream);
       }
@@ -50,27 +61,48 @@ class UserVideoCallService {
 
     this.peerConnection.onicecandidate = (event) => {
       if (event.candidate && this.onIceCandidate) {
+        console.log('Generated ICE candidate for:', event.candidate.sdpMid);
         this.onIceCandidate(event.candidate);
       }
     };
 
-    // Add connection state change handler
     this.peerConnection.onconnectionstatechange = () => {
-      console.log('Connection state changed to:', this.peerConnection?.connectionState);
-      if (this.peerConnection?.connectionState === 'connected') {
-        console.log('Peer connection established successfully');
+      const state = this.peerConnection?.connectionState;
+      console.log('Connection state changed to:', state);
+      
+      if (state === 'failed' || state === 'disconnected') {
+        void this.tryConnectionRecovery();
       }
     };
 
-    // Add ICE connection state change handler
     this.peerConnection.oniceconnectionstatechange = () => {
-      console.log('ICE connection state:', this.peerConnection?.iceConnectionState);
+      const state = this.peerConnection?.iceConnectionState;
+      console.log('ICE connection state changed to:', state);
+      
+      if (state === 'failed') {
+        this.peerConnection?.restartIce();
+      }
+      
+      if (this.onCallStateChange && state) {
+        this.onCallStateChange(state);
+      }
+    };
+
+    this.peerConnection.onnegotiationneeded = async () => {
+      try {
+        if (this.peerConnection) {
+          console.log('Negotiation needed');
+          const offer = await this.peerConnection.createOffer();
+          await this.peerConnection.setLocalDescription(offer);
+        }
+      } catch (error) {
+        console.error('Error during negotiation:', error);
+      }
     };
   }
 
   private resetPeerConnection() {
     console.log("Resetting peer connection");
-    
     if (this.peerConnection) {
       // Remove all tracks from peer connection
       const senders = this.peerConnection.getSenders();
@@ -92,17 +124,30 @@ class UserVideoCallService {
 
   async startLocalStream(): Promise<MediaStream> {
     try {
+      // First check if permissions are granted
+      const permissions = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+      permissions.getTracks().forEach(track => track.stop()); // Stop the test stream
+
       console.log("Requesting media permissions...");
       this.localStream = await navigator.mediaDevices.getUserMedia({
         video: {
           width: { ideal: 1280 },
-          height: { ideal: 720 }
+          height: { ideal: 720 },
+          facingMode: 'user',
+          frameRate: { ideal: 30 }
         },
-        audio: true
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
       });
 
-      console.log("Media permissions granted, tracks:", 
-        this.localStream.getTracks().map(t => `${t.kind}:${t.enabled}`));
+      // Verify tracks are active
+      this.localStream.getTracks().forEach(track => {
+        console.log(`Track ${track.kind} is ${track.enabled ? 'enabled' : 'disabled'}`);
+        track.enabled = true;
+      });
 
       return this.localStream;
     } catch (error) {
@@ -113,17 +158,36 @@ class UserVideoCallService {
 
   async makeCall(recipientId: string): Promise<string> {
     try {
+      const setupTimeout = new Promise<string>((_, reject) => {
+        setTimeout(() => reject(new Error('Call setup timeout')), 30000);
+      });
+
+      const callSetup = this._makeCallInternal(recipientId);
+      const result = await Promise.race([callSetup, setupTimeout]);
+      return result;
+    } catch (error) {
+      console.error('Error in call setup:', error);
+      throw error;
+    }
+  }
+
+  private async _makeCallInternal(recipientId: string): Promise<string> {
+    try {
       this.resetPeerConnection();
 
       if (!this.localStream) {
         await this.startLocalStream();
       }
 
-      // Add all tracks to peer connection
+      // Add all tracks to peer connection with transceivers
       this.localStream!.getTracks().forEach(track => {
         if (this.peerConnection) {
           console.log('Adding track to outgoing call:', track.kind, track.id);
-          this.peerConnection.addTrack(track, this.localStream!);
+          const transceiver = this.peerConnection.addTransceiver(track, {
+            direction: 'sendrecv',
+            streams: [this.localStream!]
+          });
+          console.log('Created transceiver:', transceiver.mid);
         }
       });
 
@@ -146,6 +210,7 @@ class UserVideoCallService {
     try {
       this.resetPeerConnection();
 
+      // First get local stream
       if (!this.localStream) {
         await this.startLocalStream();
       }
@@ -153,16 +218,17 @@ class UserVideoCallService {
       // Add local tracks before setting remote description
       this.localStream!.getTracks().forEach(track => {
         if (this.peerConnection) {
-          console.log('Adding local track for incoming call:', track.kind, track.id);
+          console.log('Adding local track for incoming call:', track.kind);
           this.peerConnection.addTrack(track, this.localStream!);
         }
       });
 
+      // Then set remote description
       const offerString = Buffer.from(offerBase64, 'base64').toString('utf-8');
       const offer = JSON.parse(offerString);
-
       await this.peerConnection!.setRemoteDescription(new RTCSessionDescription(offer));
       console.log('Remote description set for incoming call');
+
     } catch (error) {
       console.error('Error handling incoming call:', error);
       throw error;

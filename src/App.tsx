@@ -171,18 +171,14 @@ const IncomingCallDialog: React.FC = () => {
 
 const App: React.FC = () => {
   return (
-    <CallProvider>
-      <AppContent />
-    </CallProvider>
+    <Provider store={store}>
+      <PersistGate loading={<LoadingSpinner />} persistor={persistor}>
+        <CallProvider>
+          <AppContent />
+        </CallProvider>
+      </PersistGate>
+    </Provider>
   );
 };
 
-const RootApp: React.FC = () => (
-  <Provider store={store}>
-    <PersistGate loading={<LoadingSpinner />} persistor={persistor}>
-      <App />
-    </PersistGate>
-  </Provider>
-);
-
-export default RootApp;
+export default App;

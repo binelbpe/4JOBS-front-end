@@ -11,6 +11,11 @@ interface UserVideoCallProps {
   incomingCallData?: { callerId: string, offer: string } | null;
 }
 
+interface IceData {
+  candidate: RTCIceCandidate;
+  callerId?: string;
+}
+
 const UserVideoCall: React.FC<UserVideoCallProps> = ({ recipientId, onEndCall, incomingCallData }) => {
   const { incomingCallData: contextIncomingCallData } = useCall();
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
@@ -159,6 +164,122 @@ const UserVideoCall: React.FC<UserVideoCallProps> = ({ recipientId, onEndCall, i
     }
   }, [remoteStream]);
 
+  useEffect(() => {
+    if (remoteStream && remoteVideoRef.current) {
+      console.log('Setting remote stream to video element');
+      
+      const playVideo = async () => {
+        try {
+          if (!remoteVideoRef.current) return;
+          
+          remoteVideoRef.current.srcObject = remoteStream;
+          await remoteVideoRef.current.play();
+          console.log('Remote video playing successfully');
+        } catch (error: unknown) {
+          if (error instanceof DOMException && error.name === 'AbortError') {
+            console.log('Play interrupted, retrying...');
+            // Add a check before retrying
+            if (remoteVideoRef.current && !remoteVideoRef.current.srcObject) {
+              setTimeout(playVideo, 1000);
+            }
+          } else {
+            console.error('Error playing remote video:', error);
+          }
+        }
+      };
+
+      playVideo();
+
+      // Cleanup function
+      return () => {
+        if (remoteVideoRef.current) {
+          remoteVideoRef.current.srcObject = null;
+        }
+      };
+    }
+  }, [remoteStream]);
+
+  useEffect(() => {
+    userVideoCallService.setOnRemoteStreamUpdate((stream) => {
+      console.log('Remote stream updated:', stream.getTracks().map(t => `${t.kind}:${t.enabled}`));
+      setRemoteStream(stream);
+    });
+
+    // ... rest of the effect code ...
+  }, [recipientId, onEndCall, incomingCallData]);
+
+  useEffect(() => {
+    // Add ICE candidate handling
+    const handleIceCandidate = socketService.onIceCandidate(async (data) => {
+      try {
+        if (data.candidate) {
+          const candidateString = Buffer.from(JSON.stringify(data.candidate)).toString('base64');
+          await userVideoCallService.handleIceCandidate(candidateString);
+        }
+      } catch (error) {
+        console.error('Error handling ICE candidate:', error);
+      }
+    });
+
+    return () => {
+      handleIceCandidate(); // Cleanup listener
+    };
+  }, []);
+
+  // Update ICE candidate handling
+  useEffect(() => {
+    const handleIncomingIce = socketService.onIceCandidate(async (data: IceData) => {
+      try {
+        if (data.candidate) {
+          console.log('Received ICE candidate:', data.candidate);
+          await userVideoCallService.handleIceCandidate(
+            btoa(JSON.stringify(data.candidate))
+          );
+        }
+      } catch (error) {
+        console.error('Error handling ICE candidate:', error);
+      }
+    });
+
+    userVideoCallService.setOnIceCandidate((candidate) => {
+      console.log('Sending ICE candidate to:', recipientId);
+      socketService.emitIceCandidate(recipientId, candidate);
+    });
+
+    return () => {
+      handleIncomingIce();
+    };
+  }, [recipientId]);
+
+  // Add call state monitoring
+  useEffect(() => {
+    userVideoCallService.setOnCallStateChange((state) => {
+      console.log('Call state changed:', state);
+      if (state === 'failed' || state === 'disconnected') {
+        setError('Call connection failed. Please try again.');
+        onEndCall();
+      }
+    });
+  }, [onEndCall]);
+
+  // Add this effect to monitor remote stream changes
+  useEffect(() => {
+    if (remoteStream) {
+      console.log('Remote stream tracks:', remoteStream.getTracks().map(track => ({
+        kind: track.kind,
+        enabled: track.enabled,
+        readyState: track.readyState,
+        muted: track.muted
+      })));
+      
+      remoteStream.getTracks().forEach(track => {
+        track.onended = () => console.log(`Track ${track.kind} ended`);
+        track.onmute = () => console.log(`Track ${track.kind} muted`);
+        track.onunmute = () => console.log(`Track ${track.kind} unmuted`);
+      });
+    }
+  }, [remoteStream]);
+
   if (error) {
     return (
       <div className="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50">
@@ -186,7 +307,14 @@ const UserVideoCall: React.FC<UserVideoCallProps> = ({ recipientId, onEndCall, i
                 ref={remoteVideoRef}
                 autoPlay
                 playsInline
-                className="w-full h-full object-cover"
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                className="w-full h-full"
+                muted={false}
+                controls
+                onLoadedMetadata={() => {
+                  console.log('Remote video metadata loaded');
+                  remoteVideoRef.current?.play().catch(console.error);
+                }}
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center text-white">
