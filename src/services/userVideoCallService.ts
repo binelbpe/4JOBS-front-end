@@ -59,10 +59,28 @@ class UserVideoCallService {
       }
     };
 
+    // Add queue for ICE candidates received before remote description
+    const pendingIceCandidates: RTCIceCandidate[] = [];
+
     this.peerConnection.onicecandidate = (event) => {
       if (event.candidate && this.onIceCandidate) {
         console.log('Generated ICE candidate for:', event.candidate.sdpMid);
         this.onIceCandidate(event.candidate);
+      }
+    };
+
+    // Add method to handle pending candidates
+    const processPendingCandidates = async () => {
+      while (pendingIceCandidates.length > 0) {
+        const candidate = pendingIceCandidates.shift();
+        if (candidate) {
+          try {
+            await this.peerConnection!.addIceCandidate(candidate);
+            console.log('Added pending ICE candidate');
+          } catch (error) {
+            console.error('Error adding pending ICE candidate:', error);
+          }
+        }
       }
     };
 
@@ -99,6 +117,37 @@ class UserVideoCallService {
         console.error('Error during negotiation:', error);
       }
     };
+
+    // Update handleIceCandidate method
+    this.handleIceCandidate = async (candidateBase64: string): Promise<void> => {
+      if (!this.peerConnection) {
+        throw new Error('Peer connection not initialized');
+      }
+
+      try {
+        const candidateString = Buffer.from(candidateBase64, 'base64').toString('utf-8');
+        const candidate = JSON.parse(candidateString);
+        const iceCandidate = new RTCIceCandidate(candidate);
+
+        if (this.peerConnection.remoteDescription) {
+          await this.peerConnection.addIceCandidate(iceCandidate);
+          console.log('Added ICE candidate immediately');
+        } else {
+          console.log('Queuing ICE candidate until remote description is set');
+          pendingIceCandidates.push(iceCandidate);
+        }
+      } catch (error) {
+        console.error('Error handling ICE candidate:', error);
+        throw error;
+      }
+    };
+
+    // Update setRemoteDescription to process pending candidates
+    const originalSetRemoteDescription = this.peerConnection.setRemoteDescription.bind(this.peerConnection);
+    this.peerConnection.setRemoteDescription = async (description: RTCSessionDescription) => {
+      await originalSetRemoteDescription(description);
+      await processPendingCandidates();
+    };
   }
 
   private resetPeerConnection() {
@@ -124,11 +173,20 @@ class UserVideoCallService {
 
   async startLocalStream(): Promise<MediaStream> {
     try {
+      console.log("Starting local stream...");
+      
       // First check if permissions are granted
-      const permissions = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-      permissions.getTracks().forEach(track => track.stop()); // Stop the test stream
+      const permissions = await navigator.mediaDevices.getUserMedia({ 
+        audio: true, 
+        video: true 
+      }).catch(error => {
+        console.error("Permission error:", error);
+        throw new Error("Camera/Microphone permission denied");
+      });
+      
+      permissions.getTracks().forEach(track => track.stop());
 
-      console.log("Requesting media permissions...");
+      console.log("Requesting media with constraints...");
       this.localStream = await navigator.mediaDevices.getUserMedia({
         video: {
           width: { ideal: 1280 },
@@ -143,11 +201,13 @@ class UserVideoCallService {
         }
       });
 
-      // Verify tracks are active
-      this.localStream.getTracks().forEach(track => {
-        console.log(`Track ${track.kind} is ${track.enabled ? 'enabled' : 'disabled'}`);
-        track.enabled = true;
-      });
+      console.log("Local stream obtained with tracks:", 
+        this.localStream.getTracks().map(t => ({
+          kind: t.kind,
+          enabled: t.enabled,
+          readyState: t.readyState
+        }))
+      );
 
       return this.localStream;
     } catch (error) {
@@ -179,23 +239,23 @@ class UserVideoCallService {
         await this.startLocalStream();
       }
 
-      // Add all tracks to peer connection with transceivers
+      // Add transceivers before creating offer
+      const audioTransceiver = this.peerConnection!.addTransceiver('audio', {
+        direction: 'sendrecv'
+      });
+      const videoTransceiver = this.peerConnection!.addTransceiver('video', {
+        direction: 'sendrecv'
+      });
+
+      // Then add tracks
       this.localStream!.getTracks().forEach(track => {
         if (this.peerConnection) {
           console.log('Adding track to outgoing call:', track.kind, track.id);
-          const transceiver = this.peerConnection.addTransceiver(track, {
-            direction: 'sendrecv',
-            streams: [this.localStream!]
-          });
-          console.log('Created transceiver:', transceiver.mid);
+          this.peerConnection.addTrack(track, this.localStream!);
         }
       });
 
-      const offer = await this.peerConnection!.createOffer({
-        offerToReceiveAudio: true,
-        offerToReceiveVideo: true
-      });
-      
+      const offer = await this.peerConnection!.createOffer();
       await this.peerConnection!.setLocalDescription(offer);
       console.log('Local description set for outgoing call');
 

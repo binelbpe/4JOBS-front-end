@@ -81,12 +81,16 @@ const UserVideoCall: React.FC<UserVideoCallProps> = ({ recipientId, onEndCall, i
       callInitialized = true;
 
       try {
+        console.log("Starting call initialization...");
+        
+        // First get local stream
         const stream = await userVideoCallService.startLocalStream();
         if (!mounted) return;
 
         console.log("Local stream obtained:", stream.getTracks());
         setLocalStream(stream);
 
+        // Set up remote stream handler
         userVideoCallService.setOnRemoteStreamUpdate((stream) => {
           if (!mounted) return;
           console.log("Remote stream received:", stream.getTracks());
@@ -94,14 +98,19 @@ const UserVideoCall: React.FC<UserVideoCallProps> = ({ recipientId, onEndCall, i
           setIsInitializing(false);
         });
 
+        // Handle incoming or outgoing call
         const callData = incomingCallData || contextIncomingCallData;
         if (callData) {
+          console.log("Handling incoming call...");
           await userVideoCallService.handleIncomingCall(callData.offer);
           const answer = await userVideoCallService.createAnswer();
+          console.log("Created answer for incoming call");
           socketService.emitCallAnswer(callData.callerId, answer);
           setIsInitializing(false);
         } else {
+          console.log("Initiating outgoing call...");
           const offer = await userVideoCallService.makeCall(recipientId);
+          console.log("Created offer for outgoing call");
           socketService.emit("userCallOffer", { recipientId, offer });
         }
 
@@ -112,6 +121,7 @@ const UserVideoCall: React.FC<UserVideoCallProps> = ({ recipientId, onEndCall, i
             if (mounted) setIsInitializing(false);
           }),
           socketService.on("userCallAnswer", async (data: { answerBase64: string }) => {
+            console.log("Received call answer");
             await userVideoCallService.handleAnswer(data.answerBase64);
           })
         ];
@@ -140,7 +150,7 @@ const UserVideoCall: React.FC<UserVideoCallProps> = ({ recipientId, onEndCall, i
       }
       userVideoCallService.disconnectCall();
     };
-  }, [recipientId, incomingCallData, contextIncomingCallData, handleEndCall]);
+  }, [recipientId, incomingCallData, contextIncomingCallData]);
 
   const handleMuteToggle = () => {
     setIsMuted(!isMuted);
@@ -172,16 +182,20 @@ const UserVideoCall: React.FC<UserVideoCallProps> = ({ recipientId, onEndCall, i
         try {
           if (!remoteVideoRef.current) return;
           
+          remoteVideoRef.current.srcObject = null; // Clear existing srcObject
           remoteVideoRef.current.srcObject = remoteStream;
+          
+          // Wait for loadedmetadata event before playing
+          await new Promise((resolve) => {
+            remoteVideoRef.current!.onloadedmetadata = resolve;
+          });
+          
           await remoteVideoRef.current.play();
           console.log('Remote video playing successfully');
         } catch (error: unknown) {
           if (error instanceof DOMException && error.name === 'AbortError') {
             console.log('Play interrupted, retrying...');
-            // Add a check before retrying
-            if (remoteVideoRef.current && !remoteVideoRef.current.srcObject) {
-              setTimeout(playVideo, 1000);
-            }
+            setTimeout(playVideo, 1000);
           } else {
             console.error('Error playing remote video:', error);
           }
@@ -189,13 +203,6 @@ const UserVideoCall: React.FC<UserVideoCallProps> = ({ recipientId, onEndCall, i
       };
 
       playVideo();
-
-      // Cleanup function
-      return () => {
-        if (remoteVideoRef.current) {
-          remoteVideoRef.current.srcObject = null;
-        }
-      };
     }
   }, [remoteStream]);
 

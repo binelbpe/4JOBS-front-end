@@ -63,28 +63,29 @@ export const CallProvider: React.FC<CallProviderProps> = ({ children }) => {
     }
     
     console.log(`Setting up video call with ${recipientId}`);
+    
+    // Reset any existing call state
+    setIsCallActive(false);
+    setIsCallInitialized(false);
+    setIncomingCallData(null);
+    
+    // Start new call
     setIsCallActive(true);
     setIsCallInitialized(true);
 
-    let timeoutId: NodeJS.Timeout;
-
-    const cleanup = () => {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-      setIsCallInitialized(false);
-      setIsCallActive(false);
-      setIncomingCallData(null);
-    };
-
-    timeoutId = setTimeout(() => {
+    const timeoutId = setTimeout(() => {
+      console.log("Checking call status...");
       if (!isCallActive) {
         console.log("Call setup timed out");
-        cleanup();
+        setIsCallInitialized(false);
+        setIsCallActive(false);
+        setIncomingCallData(null);
       }
     }, 30000);
 
-    return cleanup;
+    return () => {
+      clearTimeout(timeoutId);
+    };
   }, [isCallInitialized, isCallActive]);
 
   const endCall = useCallback(() => {
