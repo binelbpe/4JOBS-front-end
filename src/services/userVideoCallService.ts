@@ -31,6 +31,8 @@ class UserVideoCallService {
     }
 
     this.peerConnection = new RTCPeerConnection(webRTCConfig);
+    let makingOffer = false;
+    let ignoreOffer = false;
 
     this.peerConnection.ontrack = (event) => {
       try {
@@ -124,13 +126,36 @@ class UserVideoCallService {
 
     this.peerConnection.onnegotiationneeded = async () => {
       try {
-        if (this.peerConnection) {
-          console.log("Negotiation needed");
-          const offer = await this.peerConnection.createOffer();
+        if (this.peerConnection && !makingOffer) {
+          makingOffer = true;
+          console.log("Negotiation needed, creating offer...");
+          
+          // Wait for stable signaling state
+          if (this.peerConnection.signalingState !== "stable") {
+            console.log("Signaling state not stable, waiting...");
+            await new Promise(resolve => {
+              setTimeout(resolve, 100);
+            });
+          }
+
+          const offer = await this.peerConnection.createOffer({
+            offerToReceiveAudio: true,
+            offerToReceiveVideo: true
+          });
+
+          // Check if connection is still alive
+          if (this.peerConnection.signalingState === "closed") {
+            console.log("Connection closed during negotiation");
+            return;
+          }
+
           await this.peerConnection.setLocalDescription(offer);
+          console.log("Local description set during negotiation");
         }
       } catch (error) {
         console.error("Error during negotiation:", error);
+      } finally {
+        makingOffer = false;
       }
     };
 
@@ -265,57 +290,93 @@ class UserVideoCallService {
         await this.startLocalStream();
       }
 
-      // Add transceivers before creating offer
-      const audioTransceiver = this.peerConnection!.addTransceiver("audio", {
-        direction: "sendrecv",
-      });
-      const videoTransceiver = this.peerConnection!.addTransceiver("video", {
-        direction: "sendrecv",
+      // Wait for stable state
+      while (this.peerConnection?.signalingState !== "stable") {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      // Add tracks first
+      const audioTrack = this.localStream!.getAudioTracks()[0];
+      const videoTrack = this.localStream!.getVideoTracks()[0];
+
+      if (audioTrack) {
+        this.peerConnection!.addTrack(audioTrack, this.localStream!);
+      }
+
+      if (videoTrack) {
+        this.peerConnection!.addTrack(videoTrack, this.localStream!);
+      }
+
+      // Create offer with specific order
+      const offer = await this.peerConnection!.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true
       });
 
-      // Then add tracks
-      this.localStream!.getTracks().forEach((track) => {
-        if (this.peerConnection) {
-          console.log("Adding track to outgoing call:", track.kind, track.id);
-          this.peerConnection.addTrack(track, this.localStream!);
-        }
+      // Ensure m-lines are in correct order
+      const modifiedSdp = this.ensureCorrectMLineOrder(offer.sdp || '');
+      const modifiedOffer = new RTCSessionDescription({
+        type: 'offer',
+        sdp: modifiedSdp
       });
 
-      const offer = await this.peerConnection!.createOffer();
-      await this.peerConnection!.setLocalDescription(offer);
+      await this.peerConnection!.setLocalDescription(modifiedOffer);
       console.log("Local description set for outgoing call");
 
-      return Buffer.from(JSON.stringify(offer)).toString("base64");
+      return Buffer.from(JSON.stringify(modifiedOffer)).toString("base64");
     } catch (error) {
       console.error("Error making call:", error);
       throw error;
     }
   }
 
+  // Add helper method to ensure correct m-line order
+  private ensureCorrectMLineOrder(sdp: string): string {
+    const sections = sdp.split('m=');
+    if (sections.length <= 2) return sdp;
+
+    const header = sections[0];
+    const audio = sections.find(s => s.startsWith('audio'));
+    const video = sections.find(s => s.startsWith('video'));
+
+    if (!audio || !video) return sdp;
+
+    return `${header}m=${audio}m=${video}`;
+  }
+
   async handleIncomingCall(offerBase64: string): Promise<void> {
     try {
       this.resetPeerConnection();
 
-      // First get local stream
       if (!this.localStream) {
         await this.startLocalStream();
       }
 
-      // Add local tracks before setting remote description
-      this.localStream!.getTracks().forEach((track) => {
-        if (this.peerConnection) {
-          console.log("Adding local track for incoming call:", track.kind);
-          this.peerConnection.addTrack(track, this.localStream!);
-        }
-      });
-
-      // Then set remote description
+      // Set remote description first
       const offerString = Buffer.from(offerBase64, "base64").toString("utf-8");
       const offer = JSON.parse(offerString);
-      await this.peerConnection!.setRemoteDescription(
-        new RTCSessionDescription(offer)
-      );
+      
+      // Ensure m-lines are in correct order
+      const modifiedSdp = this.ensureCorrectMLineOrder(offer.sdp);
+      const modifiedOffer = new RTCSessionDescription({
+        type: 'offer',
+        sdp: modifiedSdp
+      });
+
+      await this.peerConnection!.setRemoteDescription(modifiedOffer);
       console.log("Remote description set for incoming call");
+
+      // Then add local tracks
+      const audioTrack = this.localStream!.getAudioTracks()[0];
+      const videoTrack = this.localStream!.getVideoTracks()[0];
+
+      if (audioTrack) {
+        this.peerConnection!.addTrack(audioTrack, this.localStream!);
+      }
+
+      if (videoTrack) {
+        this.peerConnection!.addTrack(videoTrack, this.localStream!);
+      }
     } catch (error) {
       console.error("Error handling incoming call:", error);
       throw error;
