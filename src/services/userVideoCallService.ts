@@ -33,33 +33,45 @@ class UserVideoCallService {
     this.peerConnection = new RTCPeerConnection(webRTCConfig);
 
     this.peerConnection.ontrack = (event) => {
-      console.log("Track received:", {
-        kind: event.track.kind,
-        enabled: event.track.enabled,
-        readyState: event.track.readyState,
-        muted: event.track.muted,
-      });
+      try {
+        console.log("Track received:", {
+          kind: event.track.kind,
+          enabled: event.track.enabled,
+          readyState: event.track.readyState,
+          muted: event.track.muted,
+        });
 
-      if (!this.remoteStream) {
-        this.remoteStream = new MediaStream();
-        console.log("Created new remote MediaStream");
-      }
-
-      event.streams.forEach((stream) => {
-        console.log("Adding remote stream:", stream.id);
-        if (
-          !this.remoteStream!.getTracks().some((t) => t.id === event.track.id)
-        ) {
-          this.remoteStream!.addTrack(event.track);
+        if (!this.remoteStream) {
+          this.remoteStream = new MediaStream();
+          console.log("Created new remote MediaStream");
         }
-      });
 
-      if (this.onRemoteStreamUpdate) {
-        console.log(
-          "Calling remote stream update with tracks:",
-          this.remoteStream.getTracks().map((t) => `${t.kind}:${t.enabled}`)
+        // Ensure we don't add duplicate tracks
+        const existingTrack = this.remoteStream.getTracks().find(
+          t => t.kind === event.track.kind
         );
-        this.onRemoteStreamUpdate(this.remoteStream);
+        if (existingTrack) {
+          this.remoteStream.removeTrack(existingTrack);
+        }
+
+        this.remoteStream.addTrack(event.track);
+        console.log("Added track to remote stream:", event.track.kind);
+
+        // Notify about stream update
+        if (this.onRemoteStreamUpdate) {
+          console.log(
+            "Calling remote stream update with tracks:",
+            this.remoteStream.getTracks().map((t) => `${t.kind}:${t.enabled}`)
+          );
+          this.onRemoteStreamUpdate(this.remoteStream);
+        }
+
+        // Monitor track status
+        event.track.onended = () => console.log(`Remote ${event.track.kind} track ended`);
+        event.track.onmute = () => console.log(`Remote ${event.track.kind} track muted`);
+        event.track.onunmute = () => console.log(`Remote ${event.track.kind} track unmuted`);
+      } catch (error) {
+        console.error("Error handling remote track:", error);
       }
     };
 

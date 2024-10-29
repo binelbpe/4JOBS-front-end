@@ -176,33 +176,56 @@ const UserVideoCall: React.FC<UserVideoCallProps> = ({ recipientId, onEndCall, i
 
   useEffect(() => {
     if (remoteStream && remoteVideoRef.current) {
-      console.log('Setting remote stream to video element');
+      const videoElement = remoteVideoRef.current;
       
-      const playVideo = async () => {
+      const setupVideo = async () => {
         try {
-          if (!remoteVideoRef.current) return;
+          // Clear any existing srcObject
+          videoElement.srcObject = null;
           
-          remoteVideoRef.current.srcObject = null; // Clear existing srcObject
-          remoteVideoRef.current.srcObject = remoteStream;
+          // Set new srcObject
+          videoElement.srcObject = remoteStream;
+          videoElement.muted = false;
           
-          // Wait for loadedmetadata event before playing
+          // Wait for metadata to load
           await new Promise((resolve) => {
-            remoteVideoRef.current!.onloadedmetadata = resolve;
+            const handleMetadata = () => {
+              videoElement.removeEventListener('loadedmetadata', handleMetadata);
+              resolve(undefined);
+            };
+            videoElement.addEventListener('loadedmetadata', handleMetadata);
           });
-          
-          await remoteVideoRef.current.play();
-          console.log('Remote video playing successfully');
-        } catch (error: unknown) {
-          if (error instanceof DOMException && error.name === 'AbortError') {
-            console.log('Play interrupted, retrying...');
-            setTimeout(playVideo, 1000);
-          } else {
-            console.error('Error playing remote video:', error);
-          }
+
+          // Attempt to play with retry logic
+          const attemptPlay = async (retries = 3) => {
+            try {
+              await videoElement.play();
+              console.log('Remote video playing successfully');
+            } catch (error) {
+              if (error instanceof DOMException && error.name === 'AbortError' && retries > 0) {
+                console.log('Play interrupted, retrying...', retries);
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                await attemptPlay(retries - 1);
+              } else {
+                console.error('Error playing remote video:', error);
+              }
+            }
+          };
+
+          await attemptPlay();
+        } catch (error) {
+          console.error('Error setting up remote video:', error);
         }
       };
 
-      playVideo();
+      setupVideo();
+
+      // Cleanup
+      return () => {
+        if (videoElement.srcObject) {
+          videoElement.srcObject = null;
+        }
+      };
     }
   }, [remoteStream]);
 
@@ -320,7 +343,14 @@ const UserVideoCall: React.FC<UserVideoCallProps> = ({ recipientId, onEndCall, i
                 controls
                 onLoadedMetadata={() => {
                   console.log('Remote video metadata loaded');
-                  remoteVideoRef.current?.play().catch(console.error);
+                  const videoElement = remoteVideoRef.current;
+                  if (videoElement) {
+                    videoElement.play().catch(error => {
+                      if (error.name !== 'AbortError') {
+                        console.error('Error playing video:', error);
+                      }
+                    });
+                  }
                 }}
               />
             ) : (
