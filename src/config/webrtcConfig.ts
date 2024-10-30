@@ -2,20 +2,19 @@
 const getTwilioConfig = async (): Promise<RTCConfiguration> => {
   try {
     const apiUrl = process.env.REACT_APP_API_BASE_URL;
-    const tokenEndpoint = process.env.REACT_APP_TWILIO_TOKEN_ENDPOINT || '/api/twilio-token';
+    const tokenEndpoint = process.env.REACT_APP_TWILIO_TOKEN_ENDPOINT;
     
     if (!apiUrl || !tokenEndpoint) {
-      console.warn('Missing API URL or token endpoint configuration, using fallback');
-      return webRTCConfig;
+      throw new Error('Missing API configuration');
     }
 
-    console.log('Fetching Twilio config from:', `${apiUrl}${tokenEndpoint}`);
-    
     const response = await fetch(`${apiUrl}${tokenEndpoint}`, {
       method: 'GET',
       headers: {
-        'Content-Type': 'application/json'
-      }
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache'
+      },
+      credentials: 'include'
     });
 
     if (!response.ok) {
@@ -23,13 +22,10 @@ const getTwilioConfig = async (): Promise<RTCConfiguration> => {
     }
 
     const twilioData = await response.json();
-    console.log('Received Twilio config:', twilioData);
 
-    // Return a complete RTCConfiguration
     return {
       iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: ['stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'] },
         ...(twilioData.iceServers || []).map((server: any) => ({
           urls: server.url || server.urls,
           username: server.username || '',
@@ -39,19 +35,18 @@ const getTwilioConfig = async (): Promise<RTCConfiguration> => {
       iceCandidatePoolSize: 10,
       bundlePolicy: 'max-bundle',
       rtcpMuxPolicy: 'require',
-      iceTransportPolicy: 'all'
+      iceTransportPolicy: 'relay' // Force TURN usage in production
     };
   } catch (error) {
     console.error('Error getting Twilio configuration:', error);
-    return webRTCConfig;
+    throw error;
   }
 };
 
 // Export the base configuration
 export const webRTCConfig: RTCConfiguration = {
   iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: ['stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'] }
   ],
   iceCandidatePoolSize: 10,
   bundlePolicy: 'max-bundle',

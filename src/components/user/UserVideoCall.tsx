@@ -317,51 +317,16 @@ const UserVideoCall: React.FC<UserVideoCallProps> = ({ recipientId, onEndCall, i
       let playAttemptTimeout: NodeJS.Timeout | null = null;
       let playbackMonitorInterval: NodeJS.Timeout | null = null;
 
-      const attemptPlay = async (retries = 5): Promise<void> => {
-        if (!mounted) return;
-
-        try {
-          await videoElement.play();
-          console.log('Remote video playing successfully');
-          setIsInitializing(false);
-        } catch (error) {
-          if (error instanceof DOMException && 
-              error.name === 'AbortError' && 
-              retries > 0) {
-            const delay = Math.min(1000 * Math.pow(2, 5 - retries), 5000);
-            console.log(`Play attempt failed, retrying in ${delay}ms. Retries left: ${retries}`);
-            
-            if (playAttemptTimeout) {
-              clearTimeout(playAttemptTimeout);
-            }
-            
-            return new Promise((resolve) => {
-              playAttemptTimeout = setTimeout(async () => {
-                if (mounted) {
-                  try {
-                    await attemptPlay(retries - 1);
-                    resolve();
-                  } catch (retryError) {
-                    console.error('Retry failed:', retryError);
-                  }
-                }
-              }, delay);
-            });
-          }
-          throw error;
-        }
-      };
-
       const setupVideo = async () => {
         if (!mounted) return;
 
         try {
-          // Clear existing stream and wait
+          // Clear existing stream with longer delay
           if (videoElement.srcObject) {
             videoElement.pause();
             videoElement.srcObject = null;
             videoElement.load();
-            await new Promise(resolve => setTimeout(resolve, 500)); // Increased delay
+            await new Promise(resolve => setTimeout(resolve, 1000));
           }
 
           // Set up new stream
@@ -370,47 +335,93 @@ const UserVideoCall: React.FC<UserVideoCallProps> = ({ recipientId, onEndCall, i
           videoElement.playsInline = true;
           videoElement.autoplay = true;
 
-          // Wait for metadata
-          await new Promise<void>((resolve, reject) => {
-            const metadataHandler = () => {
-              videoElement.removeEventListener('loadedmetadata', metadataHandler);
-              videoElement.removeEventListener('error', errorHandler);
-              resolve();
-            };
+          // Wait for metadata with longer timeout and retry
+          const waitForMetadata = async (attempts = 3): Promise<void> => {
+            try {
+              await new Promise<void>((resolve, reject) => {
+                const metadataHandler = () => {
+                  videoElement.removeEventListener('loadedmetadata', metadataHandler);
+                  videoElement.removeEventListener('error', errorHandler);
+                  resolve();
+                };
 
-            const errorHandler = () => {
-              videoElement.removeEventListener('loadedmetadata', metadataHandler);
-              videoElement.removeEventListener('error', errorHandler);
-              reject(new Error('Failed to load video metadata'));
-            };
+                const errorHandler = (e: Event) => {
+                  videoElement.removeEventListener('loadedmetadata', metadataHandler);
+                  videoElement.removeEventListener('error', errorHandler);
+                  reject(new Error('Video metadata load failed'));
+                };
 
-            videoElement.addEventListener('loadedmetadata', metadataHandler);
-            videoElement.addEventListener('error', errorHandler);
+                videoElement.addEventListener('loadedmetadata', metadataHandler);
+                videoElement.addEventListener('error', errorHandler);
 
-            // Timeout for metadata loading
-            setTimeout(() => {
-              reject(new Error('Metadata loading timeout'));
-            }, 10000);
-          });
+                // Metadata loading timeout
+                setTimeout(() => {
+                  if (attempts > 1) {
+                    console.log(`Metadata loading timeout, retrying... (${attempts - 1} attempts left)`);
+                    void waitForMetadata(attempts - 1);
+                  } else {
+                    reject(new Error('Metadata loading timeout'));
+                  }
+                }, 5000);
+              });
+            } catch (error) {
+              if (attempts > 1) {
+                console.log('Retrying metadata load...');
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                return waitForMetadata(attempts - 1);
+              }
+              throw error;
+            }
+          };
 
-          // Start playback
+          await waitForMetadata();
+
+          // Attempt playback with exponential backoff
+          const attemptPlay = async (retries = 5): Promise<void> => {
+            try {
+              await videoElement.play();
+              console.log('Remote video playing successfully');
+              setIsInitializing(false);
+            } catch (error) {
+              if (error instanceof DOMException && 
+                  error.name === 'AbortError' && 
+                  retries > 0) {
+                const delay = Math.min(1000 * Math.pow(2, 5 - retries), 5000);
+                console.log(`Play attempt failed, retrying in ${delay}ms. Retries left: ${retries}`);
+                
+                if (playAttemptTimeout) {
+                  clearTimeout(playAttemptTimeout);
+                }
+                
+                await new Promise(resolve => setTimeout(resolve, delay));
+                if (mounted) {
+                  return attemptPlay(retries - 1);
+                }
+              }
+              throw error;
+            }
+          };
+
           await attemptPlay();
 
-          // Monitor playback
+          // Set up playback monitoring
           if (playbackMonitorInterval) {
             clearInterval(playbackMonitorInterval);
           }
 
           playbackMonitorInterval = setInterval(() => {
-            if (mounted && (videoElement.paused || videoElement.ended)) {
-              console.log('Playback stopped, attempting to resume...');
+            if (mounted && videoElement.srcObject && (videoElement.paused || videoElement.ended)) {
+              console.log('Playback interrupted, attempting to resume...');
               void attemptPlay();
             }
-          }, 5000);
+          }, 2000);
 
-          // Monitor tracks
+          // Monitor track states
           remoteStream.getTracks().forEach(track => {
-            track.onended = () => console.log(`Track ${track.kind} ended`);
+            track.onended = () => {
+              console.log(`Track ${track.kind} ended`);
+              if (mounted) setError('Video stream ended unexpectedly');
+            };
             track.onmute = () => {
               console.log(`Track ${track.kind} muted`);
               if (mounted) void attemptPlay();
@@ -428,6 +439,7 @@ const UserVideoCall: React.FC<UserVideoCallProps> = ({ recipientId, onEndCall, i
 
       void setupVideo();
 
+      // Cleanup
       return () => {
         mounted = false;
         if (playAttemptTimeout) {
