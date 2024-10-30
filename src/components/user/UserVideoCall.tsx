@@ -320,11 +320,14 @@ const UserVideoCall: React.FC<UserVideoCallProps> = ({ recipientId, onEndCall, i
         if (!mounted) return;
 
         try {
-          // Clear existing stream
+          // First stop all tracks
           if (videoElement.srcObject) {
-            videoElement.pause();
+            const oldStream = videoElement.srcObject as MediaStream;
+            oldStream.getTracks().forEach(track => track.stop());
             videoElement.srcObject = null;
-            await new Promise(resolve => setTimeout(resolve, 500));
+            videoElement.load();
+            // Wait longer after cleanup
+            await new Promise(resolve => setTimeout(resolve, 1000));
           }
 
           // Set up new stream
@@ -333,95 +336,100 @@ const UserVideoCall: React.FC<UserVideoCallProps> = ({ recipientId, onEndCall, i
           videoElement.playsInline = true;
           videoElement.autoplay = true;
 
-          // Wait for metadata with better error handling
-          const waitForMetadata = async (attempts = 5): Promise<void> => {
+          // Simplified metadata loading
+          const waitForMetadata = async (): Promise<void> => {
+            if (videoElement.readyState >= 1) {
+              return Promise.resolve();
+            }
+
             return new Promise((resolve, reject) => {
-              let timeoutId: NodeJS.Timeout;
+              const timeout = setTimeout(() => {
+                cleanup();
+                resolve(); // Don't reject, just continue
+              }, 2000);
 
               const metadataHandler = () => {
-                clearTimeout(timeoutId);
-                videoElement.removeEventListener('loadedmetadata', metadataHandler);
-                videoElement.removeEventListener('error', errorHandler);
+                cleanup();
                 resolve();
               };
 
               const errorHandler = (e: Event) => {
-                clearTimeout(timeoutId);
+                cleanup();
+                console.warn('Metadata loading error:', e);
+                resolve(); // Don't reject, just continue
+              };
+
+              const cleanup = () => {
+                clearTimeout(timeout);
                 videoElement.removeEventListener('loadedmetadata', metadataHandler);
                 videoElement.removeEventListener('error', errorHandler);
-                
-                if (attempts > 1) {
-                  console.log(`Retrying metadata load (${attempts - 1} attempts left)`);
-                  waitForMetadata(attempts - 1).then(resolve).catch(reject);
-                } else {
-                  reject(new Error('Video metadata load failed'));
-                }
               };
 
               videoElement.addEventListener('loadedmetadata', metadataHandler);
               videoElement.addEventListener('error', errorHandler);
-
-              timeoutId = setTimeout(() => {
-                videoElement.removeEventListener('loadedmetadata', metadataHandler);
-                videoElement.removeEventListener('error', errorHandler);
-                
-                if (attempts > 1) {
-                  console.log(`Metadata timeout, retrying (${attempts - 1} attempts left)`);
-                  waitForMetadata(attempts - 1).then(resolve).catch(reject);
-                } else {
-                  reject(new Error('Metadata loading timeout'));
-                }
-              }, 3000); // 3 second timeout per attempt
             });
           };
 
+          // Wait for metadata
           await waitForMetadata();
-          console.log('Metadata loaded successfully');
 
-          // Attempt playback with exponential backoff
-          const attemptPlay = async (retries = 5): Promise<void> => {
-            try {
-              await videoElement.play();
-              console.log('Remote video playing successfully');
-              setIsInitializing(false);
-            } catch (error) {
-              if (error instanceof DOMException && 
-                  error.name === 'AbortError' && 
-                  retries > 0) {
-                const delay = Math.min(1000 * Math.pow(2, 5 - retries), 5000);
-                console.log(`Play attempt failed, retrying in ${delay}ms`);
-                
-                if (playAttemptTimeout) {
-                  clearTimeout(playAttemptTimeout);
+          // Attempt playback with better error handling
+          const attemptPlay = async (retries = 3): Promise<void> => {
+            for (let i = retries; i >= 0; i--) {
+              try {
+                await videoElement.play();
+                console.log('Remote video playing successfully');
+                setIsInitializing(false);
+                return;
+              } catch (error) {
+                if (error instanceof DOMException && error.name === 'AbortError' && i > 0) {
+                  console.log(`Play attempt failed, retrying... (${i} attempts left)`);
+                  await new Promise(resolve => setTimeout(resolve, 1000));
+                  continue;
                 }
-                
-                await new Promise(resolve => setTimeout(resolve, delay));
-                if (mounted) {
-                  return attemptPlay(retries - 1);
-                }
+                throw error;
               }
-              throw error;
             }
           };
 
           await attemptPlay();
 
-          // Monitor track states
+          // Set up track monitoring
+          const trackHandlers = new Map();
           remoteStream.getTracks().forEach(track => {
-            track.onended = () => {
-              console.log(`Track ${track.kind} ended`);
-              if (mounted) {
-                setError('Video stream ended unexpectedly');
-              }
+            const handlers = {
+              ended: () => {
+                console.log(`Track ${track.kind} ended`);
+                if (mounted) {
+                  void attemptPlay();
+                }
+              },
+              mute: () => {
+                console.log(`Track ${track.kind} muted`);
+                if (mounted) {
+                  void attemptPlay();
+                }
+              },
+              unmute: () => console.log(`Track ${track.kind} unmuted`)
             };
-            track.onmute = () => {
-              console.log(`Track ${track.kind} muted`);
-              if (mounted) {
-                void attemptPlay();
-              }
-            };
-            track.onunmute = () => console.log(`Track ${track.kind} unmuted`);
+
+            track.onended = handlers.ended;
+            track.onmute = handlers.mute;
+            track.onunmute = handlers.unmute;
+            trackHandlers.set(track, handlers);
           });
+
+          // Return cleanup function
+          return () => {
+            remoteStream.getTracks().forEach(track => {
+              const handlers = trackHandlers.get(track);
+              if (handlers) {
+                track.onended = null;
+                track.onmute = null;
+                track.onunmute = null;
+              }
+            });
+          };
 
         } catch (error) {
           console.error('Error in video setup:', error);
