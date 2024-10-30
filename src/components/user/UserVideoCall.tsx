@@ -310,6 +310,111 @@ const UserVideoCall: React.FC<UserVideoCallProps> = ({ recipientId, onEndCall, i
     }
   }, [remoteStream]);
 
+  useEffect(() => {
+    if (remoteStream && remoteVideoRef.current) {
+      const videoElement = remoteVideoRef.current;
+      let mounted = true;
+      let playAttemptTimeout: NodeJS.Timeout | null = null;
+
+      const setupVideo = async () => {
+        if (!mounted) return;
+
+        try {
+          // Clear existing stream
+          if (videoElement.srcObject) {
+            videoElement.pause();
+            videoElement.srcObject = null;
+            videoElement.load();
+            // Wait for cleanup
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+
+          // Set up new stream
+          videoElement.srcObject = remoteStream;
+          videoElement.muted = false;
+          videoElement.playsInline = true;
+
+          // Function to attempt playback
+          const attemptPlay = async (retries = 5): Promise<void> => {
+            if (!mounted) return;
+
+            try {
+              await videoElement.play();
+              console.log('Remote video playing successfully');
+              setIsInitializing(false);
+            } catch (error) {
+              if (error instanceof DOMException && 
+                  error.name === 'AbortError' && 
+                  retries > 0) {
+                console.log(`Play attempt failed, retrying... (${retries} attempts left)`);
+                // Exponential backoff
+                const delay = Math.min(1000 * Math.pow(2, 5 - retries), 5000);
+                if (playAttemptTimeout) clearTimeout(playAttemptTimeout);
+                playAttemptTimeout = setTimeout(() => {
+                  if (mounted) void attemptPlay(retries - 1);
+                }, delay);
+              } else {
+                console.error('Final error playing remote video:', error);
+                throw error;
+              }
+            }
+          };
+
+          // Wait for metadata before playing
+          await new Promise<void>((resolve, reject) => {
+            const metadataHandler = () => {
+              videoElement.removeEventListener('loadedmetadata', metadataHandler);
+              videoElement.removeEventListener('error', errorHandler);
+              resolve();
+            };
+
+            const errorHandler = (e: Event) => {
+              videoElement.removeEventListener('loadedmetadata', metadataHandler);
+              videoElement.removeEventListener('error', errorHandler);
+              reject(new Error('Failed to load video metadata'));
+            };
+
+            videoElement.addEventListener('loadedmetadata', metadataHandler);
+            videoElement.addEventListener('error', errorHandler);
+          });
+
+          await attemptPlay();
+
+          // Monitor track states
+          remoteStream.getTracks().forEach(track => {
+            track.onended = () => console.log(`Track ${track.kind} ended`);
+            track.onmute = () => {
+              console.log(`Track ${track.kind} muted`);
+              // Try to recover muted tracks
+              if (mounted) void attemptPlay();
+            };
+            track.onunmute = () => console.log(`Track ${track.kind} unmuted`);
+          });
+
+        } catch (error) {
+          console.error('Error in video setup:', error);
+          if (mounted) {
+            setError('Failed to setup video stream. Please try again.');
+          }
+        }
+      };
+
+      void setupVideo();
+
+      // Cleanup function
+      return () => {
+        mounted = false;
+        if (playAttemptTimeout) {
+          clearTimeout(playAttemptTimeout);
+        }
+        if (videoElement.srcObject) {
+          videoElement.pause();
+          videoElement.srcObject = null;
+        }
+      };
+    }
+  }, [remoteStream, setIsInitializing, setError]);
+
   if (error) {
     return (
       <div className="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50">
@@ -337,20 +442,20 @@ const UserVideoCall: React.FC<UserVideoCallProps> = ({ recipientId, onEndCall, i
                 ref={remoteVideoRef}
                 autoPlay
                 playsInline
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                style={{ 
+                  width: '100%', 
+                  height: '100%', 
+                  objectFit: 'cover',
+                  transform: 'scaleX(-1)' // Mirror the video
+                }}
                 className="w-full h-full"
                 muted={false}
-                controls
-                onLoadedMetadata={() => {
-                  console.log('Remote video metadata loaded');
-                  const videoElement = remoteVideoRef.current;
-                  if (videoElement) {
-                    videoElement.play().catch(error => {
-                      if (error.name !== 'AbortError') {
-                        console.error('Error playing video:', error);
-                      }
-                    });
-                  }
+                onError={(e) => {
+                  const videoElement = e.target as HTMLVideoElement;
+                  console.error('Video error:', {
+                    code: videoElement.error?.code,
+                    message: videoElement.error?.message
+                  });
                 }}
               />
             ) : (
