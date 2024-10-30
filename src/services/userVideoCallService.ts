@@ -1,5 +1,5 @@
 import { Buffer } from "buffer";
-import { webRTCConfig, getWebRTCConfig } from "../config/webrtcConfig";
+import { getWebRTCConfig } from "../config/webrtcConfig";
 
 class UserVideoCallService {
   private peerConnection: RTCPeerConnection | null = null;
