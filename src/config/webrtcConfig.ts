@@ -24,22 +24,15 @@ const getTwilioConfig = async (): Promise<RTCConfiguration> => {
     const twilioData = await response.json();
 
     return {
-      iceServers: [
-        { urls: ['stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'] },
-        ...(twilioData.iceServers || []).map((server: any) => ({
-          urls: server.url || server.urls,
-          username: server.username || '',
-          credential: server.credential || ''
-        }))
-      ],
+      iceServers: twilioData.iceServers,
       iceCandidatePoolSize: 10,
       bundlePolicy: 'max-bundle',
       rtcpMuxPolicy: 'require',
-      iceTransportPolicy: 'relay' // Force TURN usage in production
+      iceTransportPolicy: 'all' // Allow both STUN and TURN
     };
   } catch (error) {
     console.error('Error getting Twilio configuration:', error);
-    throw error;
+    return webRTCConfig;
   }
 };
 
