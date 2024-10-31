@@ -32,20 +32,20 @@ class UserVideoCallService {
         this.peerConnection = null;
       }
 
-      // Get configuration and ensure it's valid
       const config = await getWebRTCConfig();
-      console.log("Got WebRTC config:", config);
+      console.log("Got WebRTC config with ICE servers:", 
+        config.iceServers?.length || 0, 'servers');
 
-      if (!config || !config.iceServers) {
-        throw new Error("Invalid WebRTC configuration");
-      }
-
-      // Create new peer connection
       this.peerConnection = new RTCPeerConnection(config);
-      
+
       if (!this.peerConnection) {
         throw new Error("Failed to create peer connection");
       }
+
+      // Log ICE gathering state changes
+      this.peerConnection.onicegatheringstatechange = () => {
+        console.log('ICE gathering state:', this.peerConnection?.iceGatheringState);
+      };
 
       // Add queue for ICE candidates received before remote description
       const iceCandidateQueue: RTCIceCandidate[] = [];
@@ -153,13 +153,18 @@ class UserVideoCallService {
       };
 
       // Update handleIceCandidate method
-      this.handleIceCandidate = async (candidateBase64: string): Promise<void> => {
+      this.handleIceCandidate = async (
+        candidateBase64: string
+      ): Promise<void> => {
         if (!this.peerConnection) {
           throw new Error("Peer connection not initialized");
         }
 
         try {
-          const candidateString = Buffer.from(candidateBase64, "base64").toString("utf-8");
+          const candidateString = Buffer.from(
+            candidateBase64,
+            "base64"
+          ).toString("utf-8");
           const candidate = JSON.parse(candidateString);
           const iceCandidate = new RTCIceCandidate(candidate);
 
@@ -167,7 +172,9 @@ class UserVideoCallService {
             await this.peerConnection.addIceCandidate(iceCandidate);
             console.log("Added ICE candidate immediately");
           } else {
-            console.log("Queuing ICE candidate until remote description is set");
+            console.log(
+              "Queuing ICE candidate until remote description is set"
+            );
             iceCandidateQueue.push(iceCandidate);
           }
         } catch (error) {
@@ -177,12 +184,14 @@ class UserVideoCallService {
       };
 
       // Update setRemoteDescription to process pending candidates
-      const originalSetRemoteDescription = this.peerConnection.setRemoteDescription.bind(this.peerConnection);
-      this.peerConnection.setRemoteDescription = async (description: RTCSessionDescription) => {
+      const originalSetRemoteDescription =
+        this.peerConnection.setRemoteDescription.bind(this.peerConnection);
+      this.peerConnection.setRemoteDescription = async (
+        description: RTCSessionDescription
+      ) => {
         await originalSetRemoteDescription(description);
         await processPendingCandidates();
       };
-
     } catch (error) {
       console.error("Error initializing peer connection:", error);
       throw error;
@@ -191,20 +200,22 @@ class UserVideoCallService {
 
   private async resetPeerConnection() {
     console.log("Resetting peer connection");
-    
+
     // Clean up existing connection
     if (this.peerConnection) {
       try {
         // Remove all tracks
         const senders = this.peerConnection.getSenders();
-        await Promise.all(senders.map(async (sender) => {
-          try {
-            await sender.replaceTrack(null);
-            this.peerConnection?.removeTrack(sender);
-          } catch (error) {
-            console.warn("Error removing track:", error);
-          }
-        }));
+        await Promise.all(
+          senders.map(async (sender) => {
+            try {
+              await sender.replaceTrack(null);
+              this.peerConnection?.removeTrack(sender);
+            } catch (error) {
+              console.warn("Error removing track:", error);
+            }
+          })
+        );
 
         this.peerConnection.close();
       } catch (error) {
@@ -225,8 +236,10 @@ class UserVideoCallService {
 
       // Use type assertion to access signalingState
       const pc = this.peerConnection as RTCPeerConnection;
-      if (pc.signalingState !== 'stable') {
-        console.warn("Peer connection not in stable state after initialization");
+      if (pc.signalingState !== "stable") {
+        console.warn(
+          "Peer connection not in stable state after initialization"
+        );
         throw new Error("Peer connection in invalid state");
       }
 
@@ -242,13 +255,15 @@ class UserVideoCallService {
       console.log("Starting local stream...");
 
       // First check if permissions are granted
-      const permissions = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: true,
-      }).catch((error) => {
-        console.error("Permission error:", error);
-        throw new Error("Camera/Microphone permission denied");
-      });
+      const permissions = await navigator.mediaDevices
+        .getUserMedia({
+          audio: true,
+          video: true,
+        })
+        .catch((error) => {
+          console.error("Permission error:", error);
+          throw new Error("Camera/Microphone permission denied");
+        });
 
       permissions.getTracks().forEach((track) => track.stop());
 
@@ -258,13 +273,13 @@ class UserVideoCallService {
           width: { ideal: 1280 },
           height: { ideal: 720 },
           facingMode: "user",
-          frameRate: { ideal: 30 }
+          frameRate: { ideal: 30 },
         },
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: true
-        }
+          autoGainControl: true,
+        },
       });
 
       console.log(
@@ -327,7 +342,7 @@ class UserVideoCallService {
       // Create and set offer
       const offer = await this.peerConnection.createOffer({
         offerToReceiveAudio: true,
-        offerToReceiveVideo: true
+        offerToReceiveVideo: true,
       });
 
       await this.peerConnection.setLocalDescription(offer);
@@ -365,7 +380,7 @@ class UserVideoCallService {
       // Then set remote description
       const offerString = Buffer.from(offerBase64, "base64").toString("utf-8");
       const offer = JSON.parse(offerString);
-      
+
       // Double check peer connection exists
       if (!this.peerConnection) {
         throw new Error("Peer connection lost during setup");
@@ -383,11 +398,10 @@ class UserVideoCallService {
 
       this.peerConnection.onconnectionstatechange = () => {
         console.log("Connection state:", this.peerConnection?.connectionState);
-        if (this.peerConnection?.connectionState === 'failed') {
+        if (this.peerConnection?.connectionState === "failed") {
           void this.tryConnectionRecovery();
         }
       };
-
     } catch (error) {
       console.error("Error handling incoming call:", error);
       // Add cleanup on error
