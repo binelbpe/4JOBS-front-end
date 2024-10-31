@@ -7,6 +7,7 @@ import {  useSelector } from 'react-redux';
 import { CallProvider, useCall } from './contexts/CallContext';
 import { socketService } from './services/socketService';
 import { RootState } from './redux/store';
+import { verifyTwilioConnection } from './config/webrtcConfig';
 
 // Import components
 import Login from './components/user/Login';
@@ -70,6 +71,19 @@ const AppContent: React.FC = () => {
       };
     }
   }, [user, handleIncomingCall]);
+
+  useEffect(() => {
+    const checkTwilioConnection = async () => {
+      try {
+        const isConnected = await verifyTwilioConnection();
+        console.log('Twilio connection status:', isConnected ? 'Connected' : 'Failed');
+      } catch (error) {
+        console.error('Error verifying Twilio connection:', error);
+      }
+    };
+
+    void checkTwilioConnection();
+  }, []);
 
   const handleEndCall = useCallback(() => {
     endCall();

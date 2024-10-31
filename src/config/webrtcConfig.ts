@@ -1,53 +1,79 @@
 import { connect, createLocalTracks, Room } from "twilio-video";
 
-interface TwilioResponse {
-  token: string;
-  roomName: string;
-  roomSid: string;
-  expires: number;
-  iceServers: RTCIceServer[];
+interface TwilioIceServer {
+  urls: string | string[];
+  username?: string;
+  credential?: string;
 }
 
-export const getWebRTCConfig = async (): Promise<RTCConfiguration> => {
+interface TwilioResponse {
+  username: string;
+  ice_servers: TwilioIceServer[];
+  ttl: string;
+  date_created: string;
+  date_updated: string;
+  account_sid: string;
+  password: string;
+  token?: string;
+  roomName?: string;
+}
+
+const getTwilioConfig = async (): Promise<RTCConfiguration> => {
   try {
+    console.log('Fetching Twilio configuration...');
+    
     const response = await fetch(
       `${process.env.REACT_APP_API_BASE_URL}/api/twilio-token`,
       {
         method: "GET",
-        headers: { "Content-Type": "application/json" },
-        credentials: 'include' // Include cookies if needed
+        headers: {
+          "Content-Type": "application/json"
+        },
+        credentials: 'include'
       }
     );
 
     if (!response.ok) {
-      throw new Error("Failed to get Twilio token");
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    const data: TwilioResponse = await response.json();
-    console.log('Received Twilio config:', data);
+    const twilioData: TwilioResponse = await response.json();
+    console.log("Received Twilio configuration:", {
+      hasIceServers: twilioData.ice_servers?.length > 0,
+      iceServerTypes: twilioData.ice_servers?.map(server => 
+        server.urls.toString().includes('turn:') ? 'TURN' : 'STUN'
+      ),
+      username: twilioData.username ? 'present' : 'missing',
+      ttl: twilioData.ttl,
+      hasToken: !!twilioData.token,
+      hasRoomName: !!twilioData.roomName
+    });
 
-    if (!data.iceServers || data.iceServers.length === 0) {
-      throw new Error('No ICE servers received from Twilio');
-    }
-
-    return {
-      iceServers: [
-        ...data.iceServers,
-        { urls: "stun:stun1.l.google.com:19302" },
-        { urls: "stun:stun2.l.google.com:19302" }
-      ],
+    const config: RTCConfiguration = {
+      iceServers: twilioData.ice_servers.map((server: TwilioIceServer) => ({
+        urls: server.urls,
+        username: server.username || twilioData.username,
+        credential: server.credential || twilioData.password
+      })),
       iceCandidatePoolSize: 10,
       bundlePolicy: "max-bundle",
       rtcpMuxPolicy: "require",
-      iceTransportPolicy: "all"
+      iceTransportPolicy: "relay" // Force TURN usage in production
     };
+
+    console.log('Created WebRTC configuration with:', {
+      iceServers: config.iceServers?.length || 0,
+      iceTransportPolicy: config.iceTransportPolicy,
+      usingTwilio: true
+    });
+
+    return config;
   } catch (error) {
     console.error("Error getting Twilio config:", error);
-    // Return fallback configuration
+    console.log('Using fallback configuration without Twilio');
     return {
       iceServers: [
-        { urls: "stun:stun1.l.google.com:19302" },
-        { urls: "stun:stun2.l.google.com:19302" }
+        { urls: "stun:stun1.l.google.com:19302" }
       ],
       iceCandidatePoolSize: 10,
       bundlePolicy: "max-bundle",
@@ -56,6 +82,8 @@ export const getWebRTCConfig = async (): Promise<RTCConfiguration> => {
     };
   }
 };
+
+export const getWebRTCConfig = getTwilioConfig;
 
 export const connectToTwilioRoom = async (identity: string): Promise<Room> => {
   try {
@@ -72,6 +100,10 @@ export const connectToTwilioRoom = async (identity: string): Promise<Room> => {
     }
 
     const data: TwilioResponse = await response.json();
+
+    if (!data.token || !data.roomName) {
+      throw new Error("Missing token or room name in response");
+    }
 
     // Create local tracks
     const localTracks = await createLocalTracks({
@@ -104,5 +136,33 @@ export const disconnectFromRoom = async (roomSid: string): Promise<void> => {
     );
   } catch (error) {
     console.error("Error disconnecting from room:", error);
+  }
+};
+
+export const verifyTwilioConnection = async (): Promise<boolean> => {
+  try {
+    const response = await fetch(
+      `${process.env.REACT_APP_API_BASE_URL}/api/twilio-token`,
+      {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log("Twilio connection verified:", {
+      hasToken: !!data.token,
+      hasIceServers: data.iceServers?.length > 0,
+      roomName: data.roomName,
+    });
+
+    return true;
+  } catch (error) {
+    console.error("Twilio connection verification failed:", error);
+    return false;
   }
 };
