@@ -78,12 +78,9 @@ const UserConversation: React.FC<ConversationProps> = ({ conversationId }) => {
         currentUser.id
       );
       setNewMessage("");
-      // You might want to add a setTimeout to set messageSending back to false
-      // in case the socket doesn't respond quickly enough
       setTimeout(() => dispatch(setMessageSending(false)), 2000);
     }
   };
-  console.log("conversation", conversation);
 
   const handleTyping = () => {
     if (!isTyping) {
@@ -117,15 +114,12 @@ const UserConversation: React.FC<ConversationProps> = ({ conversationId }) => {
 
     let date: Date | null = null;
 
-    // Try parsing as ISO string
     date = parseISO(dateString);
 
-    // If parsing as ISO failed, try creating a new Date object
     if (!isValid(date)) {
       date = new Date(dateString);
     }
 
-    // If both methods failed, return a default string
     if (!isValid(date)) {
       console.error(`Invalid date: ${dateString}`);
       return "Invalid Date";
@@ -140,10 +134,8 @@ const UserConversation: React.FC<ConversationProps> = ({ conversationId }) => {
 
   useEffect(() => {
     const handleIncomingCall = (callerId: string, offerBase64: string) => {
-      console.log("Handling incoming call:", { callerId, offerBase64 });
       setIncomingCall(true);
       setIncomingCallOffer(offerBase64);
-      // You can play a ringtone here
     };
 
     userRecruiterSocketService.onIncomingCall(handleIncomingCall);
@@ -180,13 +172,6 @@ const UserConversation: React.FC<ConversationProps> = ({ conversationId }) => {
     userRecruiterSocketService.emitEndCall(conversation?.participant.id || "");
   };
 
-  // Add this before the return statement
-  console.log("UserConversation render state:", {
-    incomingCall,
-    isVideoCallActive,
-    incomingCallOffer,
-  });
-
   useEffect(() => {
     userRecruiterSocketService.onCallEnded(() => {
       setIsVideoCallActive(false);
@@ -202,7 +187,7 @@ const UserConversation: React.FC<ConversationProps> = ({ conversationId }) => {
       <div
         ref={messageListRef}
         className="flex-grow overflow-y-auto p-4"
-        style={{ maxHeight: "calc(100vh - 200px)" }} // Adjusted for smaller screens
+        style={{ maxHeight: "calc(100vh - 200px)" }}
       >
         {messages.map((message: URMessage) => (
           <div

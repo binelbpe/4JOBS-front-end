@@ -21,7 +21,6 @@ const Sidebar: React.FC = () => {
 
   return (
     <>
-      {/* Toggle button for small screens */}
       <div className="md:hidden fixed top-0 left-0 z-50 p-2 sm:p-4">
         <button
           onClick={toggleSidebar}
@@ -34,8 +33,6 @@ const Sidebar: React.FC = () => {
           )}
         </button>
       </div>
-
-      {/* Sidebar */}
       <aside
         className={`fixed top-0 left-0 h-screen w-64 bg-purple-700 text-white transform transition-transform duration-300 ease-in-out overflow-y-auto z-40
           ${isOpen ? "translate-x-0" : "-translate-x-full"}
@@ -103,8 +100,6 @@ const Sidebar: React.FC = () => {
           </ul>
         </nav>
       </aside>
-
-      {/* Overlay to close sidebar when clicking outside */}
       {isOpen && (
         <div
           className="fixed inset-0 bg-black bg-opacity-50 md:hidden z-30"

@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import userVideoCallService from "../../services/userVideoCallService";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import {
-  faMicrophone,
-  faMicrophoneSlash,
-  faVideo,
-  faVideoSlash,
-  faPhone,
-} from "@fortawesome/free-solid-svg-icons";
+// import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+// import {
+//   faMicrophone,
+//   faMicrophoneSlash,
+//   faVideo,
+//   faVideoSlash,
+//   faPhone,
+// } from "@fortawesome/free-solid-svg-icons";
 import { socketService } from "../../services/socketService";
 import { useCall } from "../../contexts/CallContext";
 
@@ -15,17 +15,6 @@ interface UserVideoCallProps {
   recipientId: string;
   onEndCall: () => void;
   incomingCallData?: { callerId: string; offer: string } | null;
-}
-
-interface IceData {
-  candidate: RTCIceCandidate;
-  callerId?: string;
-}
-
-interface CallbackTypes {
-  onRemoteStream: (stream: MediaStream) => void;
-  onIceCandidate: (candidate: RTCIceCandidate) => void;
-  onCallState: (state: RTCPeerConnectionState | RTCIceConnectionState) => void;
 }
 
 const UserVideoCall: React.FC<UserVideoCallProps> = ({
@@ -47,22 +36,27 @@ const UserVideoCall: React.FC<UserVideoCallProps> = ({
     (stream: MediaStream, videoElement: HTMLVideoElement | null) => {
       if (videoElement && stream) {
         try {
-          console.log(
-            `Attaching ${
-              videoElement === localVideoRef.current ? "local" : "remote"
-            } stream:`,
-            stream.getTracks().map((t) => `${t.kind}:${t.enabled}`)
-          );
+          console.log(`Attaching ${videoElement === localVideoRef.current ? 'local' : 'remote'} stream:`, {
+            tracks: stream.getTracks().map(t => ({
+              kind: t.kind,
+              enabled: t.enabled,
+              muted: t.muted,
+              readyState: t.readyState
+            }))
+          });
 
           videoElement.srcObject = stream;
           videoElement.muted = videoElement === localVideoRef.current;
+          videoElement.playsInline = true;
 
           const playPromise = videoElement.play();
-          if (playPromise !== undefined) {
-            playPromise.catch((error) => {
-              if (error.name !== "AbortError") {
-                console.error("Error playing video:", error);
-              }
+          if (playPromise) {
+            playPromise.catch(error => {
+              console.error("Error playing video:", error);
+              // Retry play
+              setTimeout(() => {
+                videoElement.play().catch(console.error);
+              }, 1000);
             });
           }
         } catch (error) {
@@ -82,9 +76,9 @@ const UserVideoCall: React.FC<UserVideoCallProps> = ({
   useEffect(() => {
     if (remoteStream && remoteVideoRef.current) {
       attachStreamToVideo(remoteStream, remoteVideoRef.current);
-      setIsInitializing(false); // Set initializing to false when remote stream is attached
+      setIsInitializing(false);
     }
-  }, [remoteStream, attachStreamToVideo]);
+  }, [remoteStream, attachStreamToVideo, localStream]);
 
   const handleEndCall = useCallback(() => {
     console.log("Ending call");
@@ -97,23 +91,14 @@ const UserVideoCall: React.FC<UserVideoCallProps> = ({
 
   useEffect(() => {
     let mounted = true;
-    let callInitialized = false;
 
-    const startCall = async () => {
-      if (callInitialized) return;
-      callInitialized = true;
-
+    const initializeCall = async () => {
       try {
         console.log("Starting call initialization...");
-
-        // First get local stream
         const stream = await userVideoCallService.startLocalStream();
         if (!mounted) return;
-
-        console.log("Local stream obtained:", stream.getTracks());
         setLocalStream(stream);
 
-        // Set up remote stream handler
         userVideoCallService.setOnRemoteStreamUpdate((stream: MediaStream) => {
           if (!mounted) return;
           console.log("Remote stream received:", stream.getTracks());
@@ -121,66 +106,59 @@ const UserVideoCall: React.FC<UserVideoCallProps> = ({
           setIsInitializing(false);
         });
 
-        // Handle incoming or outgoing call
-        const callData = incomingCallData || contextIncomingCallData;
-        if (callData) {
+        if (incomingCallData) {
           console.log("Handling incoming call...");
-          await userVideoCallService.handleIncomingCall(callData.offer);
+          await userVideoCallService.handleIncomingCall(incomingCallData.offer);
           const answer = await userVideoCallService.createAnswer();
-          console.log("Created answer for incoming call");
-          socketService.emitCallAnswer(callData.callerId, answer);
-          setIsInitializing(false);
+          socketService.emitCallAnswer(incomingCallData.callerId, answer);
         } else {
           console.log("Initiating outgoing call...");
           const offer = await userVideoCallService.makeCall(recipientId);
-          console.log("Created offer for outgoing call");
           socketService.emit("userCallOffer", { recipientId, offer });
         }
 
-        // Set up socket event listeners
-        const listeners = [
-          socketService.onCallAccepted(() => {
-            console.log("Call accepted, waiting for media");
-            if (mounted) setIsInitializing(false);
-          }),
-          socketService.on(
-            "userCallAnswer",
-            async (data: { answerBase64: string }) => {
-              console.log("Received call answer");
-              await userVideoCallService.handleAnswer(data.answerBase64);
+        // Set up socket listeners
+        const removeAnswerListener = socketService.on(
+          "userCallAnswer",
+          async (data: { answerBase64: string }) => {
+            console.log("Received call answer");
+            await userVideoCallService.handleAnswer(data.answerBase64);
+          }
+        );
+
+        const removeIceCandidateListener = socketService.on(
+          "iceCandidate",
+          async (data: { candidate: RTCIceCandidate }) => {
+            try {
+              await userVideoCallService.handleIceCandidate(
+                Buffer.from(JSON.stringify(data.candidate)).toString("base64")
+              );
+            } catch (error) {
+              console.error("Error handling ICE candidate:", error);
             }
-          ),
-        ];
+          }
+        );
 
         return () => {
-          listeners.forEach((removeListener) => removeListener());
+          removeAnswerListener();
+          removeIceCandidateListener();
         };
       } catch (error) {
         console.error("Error in call setup:", error);
         if (mounted) {
-          setError(
-            `Failed to start video call: ${
-              error instanceof Error ? error.message : "Unknown error"
-            }`
-          );
+          setError(`Failed to start video call: ${error instanceof Error ? error.message : "Unknown error"}`);
           setIsInitializing(false);
         }
       }
     };
 
-    startCall();
+    initializeCall();
 
     return () => {
       mounted = false;
-      if (localStream) {
-        localStream.getTracks().forEach((track) => track.stop());
-      }
-      if (remoteStream) {
-        remoteStream.getTracks().forEach((track) => track.stop());
-      }
       userVideoCallService.disconnectCall();
     };
-  }, [recipientId, incomingCallData, contextIncomingCallData]);
+  }, [recipientId, incomingCallData]);
 
   const handleMuteToggle = () => {
     setIsMuted(!isMuted);
@@ -210,14 +188,13 @@ const UserVideoCall: React.FC<UserVideoCallProps> = ({
 
       const setupVideo = async () => {
         try {
-          // Clear any existing srcObject
+          
           videoElement.srcObject = null;
 
-          // Set new srcObject
           videoElement.srcObject = remoteStream;
           videoElement.muted = false;
 
-          // Wait for metadata to load
+     
           await new Promise((resolve) => {
             const handleMetadata = () => {
               videoElement.removeEventListener(
@@ -229,7 +206,7 @@ const UserVideoCall: React.FC<UserVideoCallProps> = ({
             videoElement.addEventListener("loadedmetadata", handleMetadata);
           });
 
-          // Attempt to play with retry logic
+        
           const attemptPlay = async (retries = 3) => {
             try {
               await videoElement.play();
@@ -639,27 +616,17 @@ const UserVideoCall: React.FC<UserVideoCallProps> = ({
                   width: "100%",
                   height: "100%",
                   objectFit: "contain",
-                  backgroundColor: "#000",
-                  transform: isVideoHidden ? "scale(0)" : "none",
+                  backgroundColor: "#000"
                 }}
-                className="w-full h-full"
                 muted={false}
-                onLoadedMetadata={() => {
-                  console.log('Video metadata loaded');
-                  const videoElement = remoteVideoRef.current;
-                  if (videoElement) {
-                    videoElement.play().catch(error => {
-                      console.warn('Initial play failed:', error);
-                    });
-                  }
-                }}
-                onPlay={() => console.log('Video playback started')}
-                onError={(e) => {
-                  const videoElement = e.target as HTMLVideoElement;
-                  console.error('Video error:', {
-                    error: videoElement.error,
-                    readyState: videoElement.readyState,
-                    networkState: videoElement.networkState
+                onLoadedMetadata={(e) => {
+                  const video = e.target as HTMLVideoElement;
+                  video.play().catch(error => {
+                    console.error("Error playing video:", error);
+                    // Retry play
+                    setTimeout(() => {
+                      video.play().catch(console.error);
+                    }, 1000);
                   });
                 }}
               />
@@ -712,8 +679,8 @@ const UserVideoCall: React.FC<UserVideoCallProps> = ({
             {isVideoHidden ? "Show Video" : "Hide Video"}
           </button>
           <button
-            onClick={onEndCall}
-            className="bg-red-500 text-white p-2 rounded-full"
+            onClick={handleEndCall}
+            className="bg-red-500 text-white px-4 py-2 rounded-lg"
           >
             End Call
           </button>

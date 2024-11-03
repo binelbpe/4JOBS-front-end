@@ -49,7 +49,6 @@ const RecruiterConversation: React.FC<ConversationProps> = ({
   const [isVideoCallActive, setIsVideoCallActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-
   const scrollToBottom = useCallback(() => {
     if (messageListRef.current) {
       messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
@@ -79,7 +78,6 @@ const RecruiterConversation: React.FC<ConversationProps> = ({
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
- 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newMessage.trim() && currentRecruiter) {
@@ -99,7 +97,6 @@ const RecruiterConversation: React.FC<ConversationProps> = ({
       }
     }
   };
-
 
   const handleTyping = () => {
     if (!isTyping) {
@@ -150,9 +147,7 @@ const RecruiterConversation: React.FC<ConversationProps> = ({
       setIsVideoCallActive(false);
     });
 
-    return () => {
-      // Clean up any listeners if necessary
-    };
+    return () => {};
   }, []);
 
   return (

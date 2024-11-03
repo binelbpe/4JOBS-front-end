@@ -22,14 +22,17 @@ const getTwilioConfig = async (): Promise<RTCConfiguration> => {
   try {
     console.log('Fetching Twilio configuration...');
     
+    const API_URL = process.env.REACT_APP_API_BASE_URL || 'https://your-production-api.com';
+    
     const response = await fetch(
-      `${process.env.REACT_APP_API_BASE_URL}/api/twilio-token`,
+      `${API_URL}/api/twilio-token`,
       {
         method: "GET",
         headers: {
           "Content-Type": "application/json"
         },
-        credentials: 'include'
+        credentials: 'include',
+        signal: AbortSignal.timeout(10000)
       }
     );
 
@@ -38,16 +41,6 @@ const getTwilioConfig = async (): Promise<RTCConfiguration> => {
     }
 
     const twilioData: TwilioResponse = await response.json();
-    console.log("Received Twilio configuration:", {
-      hasIceServers: twilioData.ice_servers?.length > 0,
-      iceServerTypes: twilioData.ice_servers?.map(server => 
-        server.urls.toString().includes('turn:') ? 'TURN' : 'STUN'
-      ),
-      username: twilioData.username ? 'present' : 'missing',
-      ttl: twilioData.ttl,
-      hasToken: !!twilioData.token,
-      hasRoomName: !!twilioData.roomName
-    });
 
     const config: RTCConfiguration = {
       iceServers: twilioData.ice_servers.map((server: TwilioIceServer) => ({
@@ -58,22 +51,21 @@ const getTwilioConfig = async (): Promise<RTCConfiguration> => {
       iceCandidatePoolSize: 10,
       bundlePolicy: "max-bundle",
       rtcpMuxPolicy: "require",
-      iceTransportPolicy: "relay" // Force TURN usage in production
+      iceTransportPolicy: "all"
     };
-
-    console.log('Created WebRTC configuration with:', {
-      iceServers: config.iceServers?.length || 0,
-      iceTransportPolicy: config.iceTransportPolicy,
-      usingTwilio: true
-    });
 
     return config;
   } catch (error) {
     console.error("Error getting Twilio config:", error);
-    console.log('Using fallback configuration without Twilio');
     return {
       iceServers: [
-        { urls: "stun:stun1.l.google.com:19302" }
+        { 
+          urls: [
+            "stun:stun1.l.google.com:19302",
+            "stun:stun2.l.google.com:19302",
+            "stun:stun3.l.google.com:19302"
+          ]
+        }
       ],
       iceCandidatePoolSize: 10,
       bundlePolicy: "max-bundle",
@@ -87,13 +79,21 @@ export const getWebRTCConfig = getTwilioConfig;
 
 export const connectToTwilioRoom = async (identity: string): Promise<Room> => {
   try {
-    const response = await fetch(
-      `${process.env.REACT_APP_API_BASE_URL}/api/twilio-token?identity=${identity}`,
-      {
-        method: "GET",
-        headers: { "Content-Type": "application/json" },
-      }
-    );
+    const response = await Promise.race([
+      fetch(
+        `${process.env.REACT_APP_API_BASE_URL}/api/twilio-token?identity=${identity}`,
+        {
+          method: "GET",
+          headers: { 
+            "Content-Type": "application/json",
+          },
+          credentials: 'include'
+        }
+      ),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout')), 10000)
+      )
+    ]) as Response;
 
     if (!response.ok) {
       throw new Error("Failed to get Twilio token");
@@ -121,6 +121,9 @@ export const connectToTwilioRoom = async (identity: string): Promise<Room> => {
     return room;
   } catch (error) {
     console.error("Error connecting to Twilio room:", error);
+    if (error instanceof TypeError) {
+      throw new Error("Network connection error. Please check your internet connection.");
+    }
     throw error;
   }
 };
@@ -141,24 +144,31 @@ export const disconnectFromRoom = async (roomSid: string): Promise<void> => {
 
 export const verifyTwilioConnection = async (): Promise<boolean> => {
   try {
-    const response = await fetch(
-      `${process.env.REACT_APP_API_BASE_URL}/api/twilio-token`,
-      {
-        method: "GET",
-        headers: { "Content-Type": "application/json" },
-      }
-    );
+    const response = await Promise.race([
+      fetch(
+        `${process.env.REACT_APP_API_BASE_URL}/api/twilio-token`,
+        {
+          method: "GET",
+          headers: { 
+            "Content-Type": "application/json" 
+          },
+          credentials: 'include'
+        }
+      ),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Connection timeout')), 5000)
+      )
+    ]) as Response;
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    const data = await response.json();
-    console.log("Twilio connection verified:", {
-      hasToken: !!data.token,
-      hasIceServers: data.iceServers?.length > 0,
-      roomName: data.roomName,
-    });
+    const data = await response.json() as TwilioResponse;
+    if (!data.ice_servers || data.ice_servers.length === 0) {
+      console.warn("No ICE servers received from Twilio");
+      return false;
+    }
 
     return true;
   } catch (error) {

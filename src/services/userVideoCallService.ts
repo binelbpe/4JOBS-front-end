@@ -77,39 +77,29 @@ class UserVideoCallService {
 
       this.peerConnection.ontrack = (event) => {
         try {
-          console.log("Track received:", {
+          console.log("Received remote track:", {
             kind: event.track.kind,
             enabled: event.track.enabled,
-            readyState: event.track.readyState,
-            settings: event.track.getSettings()
+            readyState: event.track.readyState
           });
 
           if (!this.remoteStream) {
             this.remoteStream = new MediaStream();
             console.log("Created new remote stream");
           }
-
-          // Handle track replacement
-          const existingTrack = this.remoteStream.getTracks().find(
-            t => t.kind === event.track.kind
-          );
-          if (existingTrack) {
-            console.log(`Removing existing ${event.track.kind} track`);
-            this.remoteStream.removeTrack(existingTrack);
-            existingTrack.stop();
+          
+          if (event.streams && event.streams[0]) {
+            this.remoteStream = event.streams[0];
+            console.log("Using stream from track event");
+            
+            if (this.onRemoteStreamUpdate) {
+              this.onRemoteStreamUpdate(this.remoteStream);
+            }
           }
-
-          // Ensure track is enabled and active
-          event.track.enabled = true;
-
-          // Add track to stream
-          this.remoteStream.addTrack(event.track);
-          console.log(`Added ${event.track.kind} track to remote stream`);
-
-          // Monitor track state
+    
           event.track.onmute = () => {
             console.log(`Remote ${event.track.kind} track muted`);
-            event.track.enabled = true; // Try to re-enable
+            event.track.enabled = true;
           };
 
           event.track.onunmute = () => {
@@ -118,16 +108,7 @@ class UserVideoCallService {
 
           event.track.onended = () => {
             console.log(`Remote ${event.track.kind} track ended`);
-            // Try to restart the track
-            if (event.track.kind === 'video' && this.peerConnection?.connectionState === 'connected') {
-              this.tryConnectionRecovery();
-            }
           };
-
-          if (this.onRemoteStreamUpdate) {
-            console.log("Notifying remote stream update");
-            this.onRemoteStreamUpdate(this.remoteStream);
-          }
         } catch (error) {
           console.error("Error handling remote track:", error);
         }
@@ -144,7 +125,7 @@ class UserVideoCallService {
         }
       };
 
-      // Add method to handle pending candidates
+   
       const processPendingCandidates = async () => {
         while (iceCandidateQueue.length > 0) {
           const candidate = iceCandidateQueue.shift();
@@ -192,8 +173,7 @@ class UserVideoCallService {
           console.error("Error during negotiation:", error);
         }
       };
-
-      // Update handleIceCandidate method
+  
       this.handleIceCandidate = async (
         candidateBase64: string
       ): Promise<void> => {
@@ -223,8 +203,7 @@ class UserVideoCallService {
           throw error;
         }
       };
-
-      // Update setRemoteDescription to process pending candidates
+   
       const originalSetRemoteDescription =
         this.peerConnection.setRemoteDescription.bind(this.peerConnection);
       this.peerConnection.setRemoteDescription = async (
@@ -234,7 +213,7 @@ class UserVideoCallService {
         await processPendingCandidates();
       };
 
-      // Add connection state monitoring
+
       this.peerConnection.onconnectionstatechange = () => {
         console.log("Connection state:", this.peerConnection?.connectionState);
         if (this.peerConnection?.connectionState === 'connected') {
@@ -250,10 +229,9 @@ class UserVideoCallService {
   private async resetPeerConnection() {
     console.log("Resetting peer connection");
 
-    // Clean up existing connection
+ 
     if (this.peerConnection) {
       try {
-        // Remove all tracks
         const senders = this.peerConnection.getSenders();
         await Promise.all(
           senders.map(async (sender) => {
@@ -273,12 +251,11 @@ class UserVideoCallService {
       this.peerConnection = null;
     }
 
-    // Initialize new connection
+ 
     try {
       console.log("Initializing new peer connection");
       await this.initializePeerConnection();
 
-      // Type guard to ensure peerConnection exists and has correct type
       if (!this.peerConnection) {
         throw new Error("Failed to initialize peer connection");
       }
@@ -301,54 +278,28 @@ class UserVideoCallService {
 
   async startLocalStream(): Promise<MediaStream> {
     try {
-      console.log("Starting local stream...");
-      this.localStream = await navigator.mediaDevices.getUserMedia({
+      const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          width: { min: 640, ideal: 1280, max: 1920 },
-          height: { min: 480, ideal: 720, max: 1080 },
-          frameRate: { min: 15, ideal: 24, max: 30 },
-          facingMode: 'user',
-          aspectRatio: { ideal: 1.7777777778 }
+          width: { ideal: 1280, max: 1920 },
+          height: { ideal: 720, max: 1080 },
+          frameRate: { ideal: 24, max: 30 }
         },
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: true,
-          sampleRate: 48000,
-          channelCount: 2
+          autoGainControl: true
         }
       });
 
-      // Log track capabilities
-      this.localStream.getTracks().forEach(track => {
-        const settings = track.getSettings();
-        console.log(`Local ${track.kind} track settings:`, settings);
-        track.enabled = true;
-      });
-
-      return this.localStream;
+      this.localStream = stream;
+      return stream;
     } catch (error) {
-      console.error("Error getting local stream:", error);
-      throw error;
+      console.error("Error accessing media devices:", error);
+      throw new Error("Could not access camera/microphone. Please check permissions.");
     }
   }
 
   async makeCall(recipientId: string): Promise<string> {
-    try {
-      const setupTimeout = new Promise<string>((_, reject) => {
-        setTimeout(() => reject(new Error("Call setup timeout")), 30000);
-      });
-
-      const callSetup = this._makeCallInternal(recipientId);
-      const result = await Promise.race([callSetup, setupTimeout]);
-      return result;
-    } catch (error) {
-      console.error("Error in call setup:", error);
-      throw error;
-    }
-  }
-
-  private async _makeCallInternal(recipientId: string): Promise<string> {
     try {
       await this.resetPeerConnection();
 
@@ -356,14 +307,11 @@ class UserVideoCallService {
         await this.startLocalStream();
       }
 
-      // Add tracks with monitoring
+      // Add tracks with transceivers
       this.localStream!.getTracks().forEach(track => {
         if (this.peerConnection) {
-          const sender = this.peerConnection.addTrack(track, this.localStream!);
-          console.log(`Added ${track.kind} track to peer connection:`, {
-            enabled: track.enabled,
-            settings: track.getSettings()
-          });
+          this.peerConnection.addTrack(track, this.localStream!);
+          console.log(`Added track to peer connection: ${track.kind}`);
         }
       });
 
@@ -391,7 +339,6 @@ class UserVideoCallService {
         await this.startLocalStream();
       }
 
-      // Set remote description first
       const offerString = Buffer.from(offerBase64, "base64").toString("utf-8");
       const offer = JSON.parse(offerString);
       await this.peerConnection!.setRemoteDescription(new RTCSessionDescription(offer));
@@ -399,12 +346,9 @@ class UserVideoCallService {
 
       // Add local tracks
       this.localStream!.getTracks().forEach(track => {
-        if (this.peerConnection) {
-          const sender = this.peerConnection.addTrack(track, this.localStream!);
-          console.log(`Added ${track.kind} track for incoming call:`, {
-            enabled: track.enabled,
-            settings: track.getSettings()
-          });
+        if (this.peerConnection && this.localStream) {
+          this.peerConnection.addTrack(track, this.localStream);
+          console.log(`Added local track: ${track.kind}`);
         }
       });
     } catch (error) {
@@ -415,51 +359,61 @@ class UserVideoCallService {
 
   async createAnswer(): Promise<string> {
     try {
-      console.log("Starting to create answer");
-
       if (!this.peerConnection) {
-        console.error("No peer connection available for creating answer");
         throw new Error("Peer connection not initialized");
       }
 
-      console.log("Creating answer with peer connection state:", {
-        connectionState: this.peerConnection.connectionState,
-        signalingState: this.peerConnection.signalingState,
-        iceGatheringState: this.peerConnection.iceGatheringState,
-        iceConnectionState: this.peerConnection.iceConnectionState,
+      // Create answer with specific constraints
+      const answer = await this.peerConnection.createAnswer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true
       });
 
-      const answer = await this.peerConnection.createAnswer();
-      console.log("Answer created:", {
-        type: answer.type,
-        sdpLength: answer.sdp?.length,
-      });
-
+      // Set local description immediately
       await this.peerConnection.setLocalDescription(answer);
       console.log("Local description set for answer");
 
-      const answerString = JSON.stringify(answer);
-      return Buffer.from(answerString).toString("base64");
-    } catch (error) {
-      console.error("Error in createAnswer:", {
-        error,
-        peerConnectionState: this.peerConnection?.connectionState,
-        signalingState: this.peerConnection?.signalingState,
+      // Wait for ICE gathering to complete
+      await new Promise<void>((resolve) => {
+        if (this.peerConnection!.iceGatheringState === 'complete') {
+          resolve();
+        } else {
+          this.peerConnection!.onicegatheringstatechange = () => {
+            if (this.peerConnection!.iceGatheringState === 'complete') {
+              resolve();
+            }
+          };
+        }
       });
+
+      return Buffer.from(JSON.stringify(this.peerConnection.localDescription)).toString("base64");
+    } catch (error) {
+      console.error("Error creating answer:", error);
       throw error;
     }
   }
 
   async handleAnswer(answerBase64: string): Promise<void> {
-    if (!this.peerConnection) {
-      throw new Error("Peer connection not initialized");
-    }
+    try {
+      if (!this.peerConnection) {
+        throw new Error("Peer connection not initialized");
+      }
 
-    const answerString = Buffer.from(answerBase64, "base64").toString("utf-8");
-    const answer = JSON.parse(answerString);
-    await this.peerConnection.setRemoteDescription(
-      new RTCSessionDescription(answer)
-    );
+      console.log("Handling answer...");
+      const answerString = Buffer.from(answerBase64, "base64").toString("utf-8");
+      const answer = JSON.parse(answerString);
+      
+      // Wait for ICE gathering to complete
+      if (this.peerConnection.signalingState === "have-local-offer") {
+        await this.peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+        console.log("Remote description set successfully");
+      } else {
+        console.warn("Unexpected signaling state:", this.peerConnection.signalingState);
+      }
+    } catch (error) {
+      console.error("Error handling answer:", error);
+      throw error;
+    }
   }
 
   async handleIceCandidate(candidateBase64: string): Promise<void> {
@@ -525,4 +479,5 @@ class UserVideoCallService {
   }
 }
 
-export default new UserVideoCallService();
+const userVideoCallService = new UserVideoCallService();
+export default userVideoCallService;
