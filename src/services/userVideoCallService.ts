@@ -108,6 +108,7 @@ class UserVideoCallService {
 
           event.track.onended = () => {
             console.log(`Remote ${event.track.kind} track ended`);
+            event.track.enabled = true;
           };
         } catch (error) {
           console.error("Error handling remote track:", error);

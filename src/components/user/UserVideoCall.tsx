@@ -583,6 +583,21 @@ const UserVideoCall: React.FC<UserVideoCallProps> = ({
     }
   }, [remoteStream]);
 
+  useEffect(() => {
+    if (remoteStream) {
+      const checkTracks = setInterval(() => {
+        remoteStream.getTracks().forEach(track => {
+          if (!track.enabled || track.muted) {
+            console.log(`Re-enabling ${track.kind} track`);
+            track.enabled = true;
+          }
+        });
+      }, 1000);
+
+      return () => clearInterval(checkTracks);
+    }
+  }, [remoteStream]);
+
   if (error) {
     return (
       <div className="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50">
