@@ -4,7 +4,6 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { AppDispatch, RootState } from "../../redux/store";
 import { verifyOtp } from "../../redux/slices/recruiterSlice";
 import { sendOtpApi } from "../../api/recruiterApi";
-import "../../styles/recruiter/otpVerification.css";
 
 const VerifyOtp = () => {
   const [otp, setOtp] = useState("");

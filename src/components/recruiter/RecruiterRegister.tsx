@@ -3,7 +3,6 @@ import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { AppDispatch, RootState } from "../../redux/store";
 import { register, clearError } from "../../redux/slices/recruiterSlice";
-import "../../styles/recruiter/register.css";
 
 const Register: React.FC = () => {
   const [formData, setFormData] = useState({

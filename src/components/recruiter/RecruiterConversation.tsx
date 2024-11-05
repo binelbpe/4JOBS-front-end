@@ -10,9 +10,6 @@ import { Message } from "../../types/recruiterMessageType";
 import { userRecruiterSocketService } from "../../services/userRecruiterSocketService";
 import { format, isValid } from "date-fns";
 import ConversationHeader from "../shared/ConversationHeader";
-// import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-// import { faVideo } from "@fortawesome/free-solid-svg-icons";
-import VideoCall from "../shared/VideoCall";
 import { toast } from "react-toastify";
 
 interface ConversationProps {
@@ -46,7 +43,6 @@ const RecruiterConversation: React.FC<ConversationProps> = ({
   const onlineStatus = useSelector(
     (state: RootState) => state.recruiterMessages.onlineStatus
   );
-  const [isVideoCallActive, setIsVideoCallActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const scrollToBottom = useCallback(() => {
@@ -133,22 +129,7 @@ const RecruiterConversation: React.FC<ConversationProps> = ({
     (status) => status
   );
 
-  // const handleStartVideoCall = () => {
-  //   setIsVideoCallActive(true);
-  // };
 
-  const handleEndVideoCall = () => {
-    setIsVideoCallActive(false);
-    userRecruiterSocketService.emitEndCall(conversation?.participant.id || "");
-  };
-
-  useEffect(() => {
-    userRecruiterSocketService.onCallEnded(() => {
-      setIsVideoCallActive(false);
-    });
-
-    return () => {};
-  }, []);
 
   return (
     <div className="flex-1 flex flex-col h-full p-4">
@@ -243,13 +224,6 @@ const RecruiterConversation: React.FC<ConversationProps> = ({
           </button>
         </form>
       </div>
-      {isVideoCallActive && (
-        <VideoCall
-          isRecruiter={true}
-          recipientId={conversation?.participant.id || ""}
-          onEndCall={handleEndVideoCall}
-        />
-      )}
     </div>
   );
 };

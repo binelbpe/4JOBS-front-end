@@ -10,7 +10,6 @@ import {
   FaClipboard,
   FaNewspaper,
 } from "react-icons/fa";
-import "../../styles/admin/Sidebar.css";
 
 const Sidebar: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);

@@ -3,7 +3,7 @@ import { useDispatch } from "react-redux";
 import { verifyOtp } from "../../redux/slices/authSlice";
 import { AppDispatch } from "../../redux/store";
 import { sendOtpApi } from "../../api/authapi";
-import "../../styles/user/OtpVerification.css";
+
 
 interface OtpVerificationProps {
   email: string;

@@ -16,7 +16,6 @@ import {
   FaSearch,
   FaTimes,
 } from "react-icons/fa";
-import "../../styles/admin/RecruiterList.css";
 
 const AdminRecruiterList: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
